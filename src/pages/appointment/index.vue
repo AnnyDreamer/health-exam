@@ -58,20 +58,24 @@ import { CalendarX, Calendar, MapPin } from 'lucide-vue-next';
 import { useAppointmentStore } from '@/stores/appointment';
 
 const store = useAppointmentStore();
-const tabs = ['待确认', '已确认', '已完成'];
+const tabs = ['已预约', '已完成'];
 const activeTab = ref(0);
 
 const statusMap: Record<string, string> = {
-  pending: '待确认',
-  confirmed: '已确认',
+  pending: '已预约',
+  confirmed: '已预约',
   completed: '已完成',
   cancelled: '已取消',
 };
 
-const statusKeys = ['pending', 'confirmed', 'completed'];
+const statusKeys = ['confirmed', 'completed'];
 
 const filteredList = computed(() => {
   const key = statusKeys[activeTab.value];
+  if (key === 'confirmed') {
+    // "已预约" tab 包含 pending 和 confirmed
+    return store.appointments.filter((a) => a.status === 'pending' || a.status === 'confirmed');
+  }
   return store.appointments.filter((a) => a.status === key);
 });
 

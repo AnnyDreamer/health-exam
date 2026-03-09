@@ -10,12 +10,31 @@
       <!-- Hero 区域 - 所有 tab 共享 -->
       <view class="hero-fixed">
         <view class="hero">
-          <view class="hello-row hero-anim hero-anim-1">
-            <text class="hello-text">Hello</text>
-            <Sparkles :size="24" class="hello-sparkle sparkle-anim" />
+          <!-- SVG 底纹装饰 -->
+          <view class="hero-bg-pattern">
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 400 200" fill="none" preserveAspectRatio="xMidYMid slice">
+              <circle cx="320" cy="40" r="60" fill="rgba(13,148,136,0.06)" />
+              <circle cx="360" cy="120" r="40" fill="rgba(13,148,136,0.04)" />
+              <circle cx="280" cy="100" r="25" fill="rgba(13,148,136,0.05)" />
+              <path d="M250 20 Q300 60 350 30 Q400 0 380 50" stroke="rgba(13,148,136,0.08)" stroke-width="1.5" fill="none" />
+              <path d="M270 140 Q320 110 370 150" stroke="rgba(13,148,136,0.06)" stroke-width="1" fill="none" />
+              <circle cx="340" cy="170" r="15" fill="rgba(13,148,136,0.04)" />
+              <path d="M300 60 L300 72 M294 66 L306 66" stroke="rgba(13,148,136,0.1)" stroke-width="1.5" stroke-linecap="round" />
+              <path d="M370 85 L370 93 M366 89 L374 89" stroke="rgba(13,148,136,0.08)" stroke-width="1" stroke-linecap="round" />
+              <path d="M240 90 L260 90 L268 70 L276 110 L284 90 L300 90" stroke="rgba(13,148,136,0.07)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </view>
-          <text v-if="hasData || userStore.dataAuthorized" class="greet-text hero-anim hero-anim-2">你好，{{ userName }}</text>
-          <text v-else class="greet-text hero-anim hero-anim-2">让我帮你了解健康</text>
+          <view class="hero-content">
+            <view class="hero-text-area">
+              <view class="hello-row hero-anim hero-anim-1">
+                <text class="hello-text">Hello</text>
+                <Sparkles :size="24" class="hello-sparkle sparkle-anim" />
+              </view>
+              <text v-if="hasData || userStore.dataAuthorized" class="greet-text hero-anim hero-anim-2">你好，{{ userName }}</text>
+              <text v-else class="greet-text hero-anim hero-anim-2">让我帮你了解健康</text>
+            </view>
+            <image class="hero-girl hero-anim hero-anim-2" src="/static/girl.webp" mode="aspectFit" />
+          </view>
         </view>
 
         <!-- Tab 切换 -->
@@ -424,6 +443,8 @@
 import { ref, computed, nextTick, onMounted, watch, reactive } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user';
+import { usePackageStore } from '@/stores/package';
+import { useAppointmentStore } from '@/stores/appointment';
 import { useHealthStore } from '@/stores/health';
 import { useChatStore } from '@/stores/chat';
 import {
@@ -470,6 +491,15 @@ const scrollToId = ref('');
 const isViewingHistory = ref(false);
 const showDatePicker = ref(false);
 const pendingPackageCard = ref<PackageCardData | null>(null);
+const pendingGroupPkg = ref<any>(null);
+const pendingDateTime = ref<{ date: string; time: string } | null>(null);
+
+// 支付弹窗
+const showPayment = ref(false);
+const groupPaymentAmount = ref(0);
+const groupTotalPrice = ref(0);
+const groupEnterpriseCoverage = ref(0);
+const groupDiscount = ref(0.85);
 
 // 套餐弹窗
 const showPackagePopup = ref(false);
@@ -537,11 +567,6 @@ async function runLoadingSequence() {
 
   await sleep(500);
   pagePhase.value = 'ready';
-
-  // ready 后检查团检弹窗
-  if (userStore.hasGroupPackage) {
-    showPending.value = true;
-  }
 }
 
 function sleep(ms: number) {
@@ -656,10 +681,14 @@ function openPackagePopup(id: string) {
 
 function handlePopupBook(packageId: string) {
   showPackagePopup.value = false;
+  // 记住当前套餐信息（团检需要用到）
+  const pkgStore = usePackageStore();
+  pendingGroupPkg.value = pkgStore.currentPackage;
   const msg = chatStore.messages.find(m => m.packageCard?.id === packageId);
   if (msg?.packageCard) {
     pendingPackageCard.value = msg.packageCard;
   }
+  // 统一走选时间流程
   showDatePicker.value = true;
 }
 
@@ -671,10 +700,47 @@ function handleBookFromChat(packageCard: PackageCardData) {
 
 async function handleDateTimeConfirm(data: { date: string; time: string }) {
   showDatePicker.value = false;
+  pendingDateTime.value = data;
+
+  // 团检且员工自付 > 0 → 弹支付窗
+  if (pendingGroupPkg.value?.isGroupPackage) {
+    const budget = pendingGroupPkg.value.enterpriseBudget || 1000;
+    const total = pendingGroupPkg.value.totalPrice || 0;
+    const payment = Math.max(0, total - budget);
+    if (payment > 0) {
+      groupPaymentAmount.value = payment;
+      groupTotalPrice.value = total;
+      groupEnterpriseCoverage.value = Math.min(budget, total);
+      groupDiscount.value = pendingGroupPkg.value.aiAddonDiscount || 0.85;
+      showPayment.value = true;
+      return;
+    }
+    // 自付为 0，直接预约
+    await completeGroupBooking(data);
+    return;
+  }
+
   if (!pendingPackageCard.value) return;
   await chatStore.bookFromChat(pendingPackageCard.value, data.date, data.time);
   pendingPackageCard.value = null;
   scrollToBottom();
+}
+
+async function handlePaymentConfirm() {
+  showPayment.value = false;
+  if (!pendingDateTime.value) return;
+  await completeGroupBooking(pendingDateTime.value);
+}
+
+async function completeGroupBooking(data: { date: string; time: string }) {
+  const appointmentStore = useAppointmentStore();
+  const packageId = pendingGroupPkg.value?.id || pendingPackageCard.value?.id || 'pkg-group-001';
+  await appointmentStore.create({ packageId, date: data.date, time: data.time });
+  userStore.confirmGroupPackage();
+  pendingPackageCard.value = null;
+  pendingGroupPkg.value = null;
+  pendingDateTime.value = null;
+  uni.navigateTo({ url: '/pages/appointment/index' });
 }
 
 function handleNewChat() {
@@ -755,6 +821,38 @@ onShow(() => {
 /* ---- Hero ---- */
 .hero {
   padding: 4px 20px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-bg-pattern {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hero-text-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-girl {
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .hero-fixed {
