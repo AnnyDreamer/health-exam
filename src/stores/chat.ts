@@ -5,6 +5,7 @@ import type { ExamPackage } from '@/types/package';
 import { isQwenAvailable } from '@/api/qwen';
 import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT } from '@/services/aiChat';
 import { useUserStore } from '@/stores/user';
+import { useReportStore } from '@/stores/report';
 import { useHealthStore } from '@/stores/health';
 import { useAppointmentStore } from '@/stores/appointment';
 import { usePackageStore } from '@/stores/package';
@@ -44,8 +45,8 @@ function savePackageToStore(packageCard: PackageCardData) {
     items: packageCard.items.map((item, index) => {
       const itemName = typeof item === 'string' ? item : item.name;
       const aiReason = typeof item === 'string' ? undefined : item.reason;
-      const category = typeof item === 'string' ? undefined : (item as any).category;
-      const price = typeof item === 'string' ? 0 : ((item as any).price || 0);
+      const category = typeof item === 'string' ? undefined : item.category;
+      const price = typeof item === 'string' ? 0 : (item.price || 0);
       return {
         id: `item-ai-${index}`,
         name: itemName,
@@ -102,16 +103,16 @@ const makePackageWithDataScript: ScriptStep[] = [
       name: '心脑血管专项套餐',
       badge: 'AI定制',
       items: [
-        { name: '心脏彩超', reason: '血压偏高，需评估心脏结构和功能' },
-        { name: '颈动脉彩超', reason: '血压偏高，筛查颈动脉斑块和狭窄' },
-        { name: '血脂全套', reason: '总胆固醇、甘油三酯、低密度脂蛋白均偏高' },
-        { name: '同型半胱氨酸', reason: '高同型半胱氨酸是心脑血管疾病独立风险因素' },
-        { name: '甲状腺功能全套', reason: 'TSH偏高，需全面评估甲状腺功能' },
-        { name: '甲状腺彩超', reason: 'TSH异常，排查甲状腺结节等器质性病变' },
-        { name: '空腹血糖+胰岛素释放试验', reason: 'BMI接近超重，筛查胰岛素抵抗' },
-        { name: '肝脂肪定量超声（FibroScan可选）', reason: '甘油三酯升高伴BMI偏高，精准评估非酒精性脂肪肝' },
-        { name: '生化全套', reason: '综合评估肝肾功能及代谢指标' },
-        { name: '一般检查', reason: '基础体格检查，监测血压和BMI变化' },
+        { name: '心脏彩超', price: 260, reason: '血压偏高，需评估心脏结构和功能' },
+        { name: '颈动脉彩超', price: 180, reason: '血压偏高，筛查颈动脉斑块和狭窄' },
+        { name: '血脂全套', price: 120, reason: '总胆固醇、甘油三酯、低密度脂蛋白均偏高' },
+        { name: '同型半胱氨酸', price: 90, reason: '高同型半胱氨酸是心脑血管疾病独立风险因素' },
+        { name: '甲状腺功能全套', price: 220, reason: 'TSH偏高，需全面评估甲状腺功能' },
+        { name: '甲状腺彩超', price: 150, reason: 'TSH异常，排查甲状腺结节等器质性病变' },
+        { name: '空腹血糖+胰岛素释放试验', price: 180, reason: 'BMI接近超重，筛查胰岛素抵抗' },
+        { name: '肝脂肪定量超声（FibroScan可选）', price: 350, reason: '甘油三酯升高伴BMI偏高，精准评估非酒精性脂肪肝' },
+        { name: '生化全套', price: 280, reason: '综合评估肝肾功能及代谢指标' },
+        { name: '一般检查', price: 150, reason: '基础体格检查，监测血压和BMI变化' },
       ],
       totalPrice: 1680,
       originalPrice: 1980,
@@ -229,14 +230,14 @@ const makePackageGuidedScript: ScriptStep[] = [
       name: '个性化健康筛查套餐',
       badge: 'AI定制',
       items: [
-        { name: '一般检查', reason: '基础体格检查，评估身高体重血压等基本指标' },
-        { name: '血常规', reason: '筛查贫血、感染、血液系统疾病' },
-        { name: '尿常规', reason: '评估肾脏功能和泌尿系统健康' },
-        { name: '生化全套', reason: '全面评估肝肾功能、血糖血脂等代谢指标' },
-        { name: '心电图', reason: '筛查心律失常和心肌缺血' },
-        { name: '腹部B超', reason: '检查肝胆脾胰双肾是否有器质性病变' },
-        { name: '甲状腺彩超', reason: '筛查甲状腺结节等常见甲状腺疾病' },
-        { name: '胸部CT', reason: '低剂量螺旋CT筛查肺部结节和早期肺癌' },
+        { name: '一般检查', price: 150, reason: '基础体格检查，评估身高体重血压等基本指标' },
+        { name: '血常规', price: 35, reason: '筛查贫血、感染、血液系统疾病' },
+        { name: '尿常规', price: 25, reason: '评估肾脏功能和泌尿系统健康' },
+        { name: '生化全套', price: 280, reason: '全面评估肝肾功能、血糖血脂等代谢指标' },
+        { name: '心电图', price: 40, reason: '筛查心律失常和心肌缺血' },
+        { name: '腹部B超', price: 200, reason: '检查肝胆脾胰双肾是否有器质性病变' },
+        { name: '甲状腺彩超', price: 150, reason: '筛查甲状腺结节等常见甲状腺疾病' },
+        { name: '胸部CT', price: 500, reason: '低剂量螺旋CT筛查肺部结节和早期肺癌' },
       ],
       totalPrice: 1380,
       originalPrice: 1780,
@@ -370,6 +371,7 @@ export const useChatStore = defineStore('chat', () => {
   const currentScript = ref<ScriptStep[]>([]);
   const scriptIndex = ref(0);
   const isTyping = ref(false);
+  const lastFollowUpPlan = ref<FollowUpPlan | null>(null);
 
   /** AI 对话上下文（发送给千问 API 的消息历史） */
   const conversationHistory = ref<QwenMessage[]>([]);
@@ -688,6 +690,12 @@ export const useChatStore = defineStore('chat', () => {
 
     if (value === 'dismiss') {
       await simulateAIReply({ aiMessage: '好的，有需要随时找我~' });
+      return;
+    }
+
+    // 预约复查：直接根据复查方案生成套餐并预约
+    if (value === 'book-followup') {
+      await handleBookFollowUp();
       return;
     }
 
@@ -1215,6 +1223,12 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
+    // 预约复查：直接根据复查方案生成套餐并预约
+    if (value === 'book-followup') {
+      await handleBookFollowUp();
+      return;
+    }
+
     // 处理关注方向选项（有数据用户的 make-package 流程）
     if (value && value.startsWith('focus_')) {
       conversationHistory.value.push({ role: 'user', content });
@@ -1413,9 +1427,12 @@ export const useChatStore = defineStore('chat', () => {
       });
 
       // 复查方案后追加操作选项
+      // 保存最近的复查方案，供预约复查时使用
+      lastFollowUpPlan.value = plan;
+
       const options = plan.needFollowUp && plan.followUpItems.length > 0
         ? [
-            { label: '预约复查', value: 'make-package', primary: true },
+            { label: '预约复查', value: 'book-followup', primary: true },
             { label: '继续咨询', value: 'consult' },
           ]
         : [
@@ -1434,6 +1451,55 @@ export const useChatStore = defineStore('chat', () => {
       // 复查方案生成失败不影响主流程，仅追加常规后续操作
       appendFollowUpOptions();
     }
+  }
+
+  /** 预约复查：直接根据复查方案生成套餐并显示套餐卡片 */
+  async function handleBookFollowUp() {
+    const plan = lastFollowUpPlan.value;
+    if (!plan || !plan.followUpItems.length) {
+      await simulateAIReply({ aiMessage: '暂无复查方案，请先上传报告进行解读。' });
+      return;
+    }
+
+    isTyping.value = true;
+
+    // 根据复查方案项目直接生成套餐
+    const items = plan.followUpItems.map((item, i) => ({
+      name: item.name,
+      reason: item.reason,
+      category: 'standard' as const,
+      price: 0, // 复查项目不设单价
+    }));
+
+    const packageId = `pkg-followup-${Date.now()}`;
+    const packageCard: PackageCardData = {
+      id: packageId,
+      name: '复查体检方案',
+      badge: '复查',
+      items,
+      totalPrice: 0,
+    };
+
+    // 保存到 package store
+    savePackageToStore(packageCard);
+
+    isTyping.value = false;
+
+    // 显示提示消息
+    addMessage({
+      role: 'ai',
+      content: `已根据您的报告解读结果生成复查方案，包含 **${items.length}** 项检查。请选择预约时间。`,
+      contentType: 'text',
+    });
+
+    // 显示套餐卡片
+    addMessage({
+      role: 'ai',
+      content: '',
+      contentType: 'package-card',
+      packageCard,
+    });
+    _saveChatHistory();
   }
 
   /** 发送图片进行报告解读（流式） */
@@ -1478,8 +1544,18 @@ export const useChatStore = defineStore('chat', () => {
       });
       aiTurnCount.value++;
       streamingMessageId.value = null;
-      // 流式输出完成后持久化
       _saveChatHistory();
+
+      // 保存报告解读记录
+      try {
+        const reportStore = useReportStore();
+        reportStore.addReport({
+          title: '体检报告解读',
+          summary: fullText.slice(0, 200),
+          fullContent: fullText,
+          imageUrl,
+        });
+      } catch (_e) { /* ignore */ }
 
       // 报告解读完成后，自动生成复查方案
       await handleFollowUpPlanGeneration(fullText);
@@ -1533,8 +1609,18 @@ export const useChatStore = defineStore('chat', () => {
       });
       aiTurnCount.value++;
       streamingMessageId.value = null;
-      // 流式输出完成后持久化
       _saveChatHistory();
+
+      // 保存报告解读记录
+      try {
+        const reportStore = useReportStore();
+        reportStore.addReport({
+          title: '体检报告解读',
+          summary: fullText.slice(0, 200),
+          fullContent: fullText,
+          pdfFileName: fileName,
+        });
+      } catch (_e) { /* ignore */ }
 
       // 报告解读完成后，自动生成复查方案
       await handleFollowUpPlanGeneration(fullText);

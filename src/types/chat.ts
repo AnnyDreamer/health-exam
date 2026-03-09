@@ -20,7 +20,9 @@ export interface HealthCardData {
 
 export interface PackageItemWithReason {
   name: string;
+  price?: number;
   reason?: string;
+  category?: 'standard' | 'ai-addon';
 }
 
 export interface PackageCardData {

@@ -28,6 +28,13 @@
           <text class="menu-label">健康档案</text>
           <ChevronRight :size="18" color="#D1D5DB" />
         </view>
+        <view class="menu-item" @tap="goTo('/pages/report/interpret')">
+          <view class="menu-icon-wrap">
+            <FileSearch :size="18" color="#6B7280" />
+          </view>
+          <text class="menu-label">报告解读</text>
+          <ChevronRight :size="18" color="#D1D5DB" />
+        </view>
         <view class="menu-item" @tap="goTo('/pages/package/list')">
           <view class="menu-icon-wrap">
             <ClipboardList :size="18" color="#6B7280" />
@@ -64,7 +71,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { CalendarDays, FileBarChart, ClipboardList, Settings, CircleHelp, ChevronRight } from 'lucide-vue-next';
+import { CalendarDays, FileBarChart, FileSearch, ClipboardList, Settings, CircleHelp, ChevronRight } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 
 const userStore = useUserStore();

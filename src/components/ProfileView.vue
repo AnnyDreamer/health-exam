@@ -20,6 +20,13 @@
         <text class="menu-label">我的预约</text>
         <ChevronRight :size="18" color="#D1D5DB" />
       </view>
+      <view class="menu-item" @tap="goTo('/pages/report/interpret')">
+        <view class="menu-icon-wrap">
+          <FileSearch :size="18" color="#6B7280" />
+        </view>
+        <text class="menu-label">报告解读</text>
+        <ChevronRight :size="18" color="#D1D5DB" />
+      </view>
     </view>
 
     <view class="menu-section">
@@ -68,7 +75,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, Settings, CircleHelp, ChevronRight, LogOut } from 'lucide-vue-next';
+import { CalendarDays, FileSearch, Settings, CircleHelp, ChevronRight, LogOut } from 'lucide-vue-next';
 import { useUserStore } from '@/stores/user';
 
 const userStore = useUserStore();

@@ -3,6 +3,8 @@
     { "path": "pages/auth/login", "style": { "navigationStyle": "custom" } },
     { "path": "pages/ai/chat", "style": { "navigationStyle": "custom" } },
     { "path": "pages/report/detail", "style": { "navigationBarTitleText": "健康报告" } },
+    { "path": "pages/report/interpret", "style": { "navigationBarTitleText": "报告解读" } },
+    { "path": "pages/report/interpret-detail", "style": { "navigationBarTitleText": "解读详情" } },
     { "path": "pages/package/list", "style": { "navigationBarTitleText": "体检套餐" } },
     { "path": "pages/package/detail", "style": { "navigationBarTitleText": "套餐详情", "navigationStyle": "custom" } },
     { "path": "pages/package/customize", "style": { "navigationBarTitleText": "自定义套餐" } },

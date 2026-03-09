@@ -162,7 +162,10 @@ const props = defineProps<{
   packageId: string;
 }>();
 
-const emit = defineEmits(['close', 'book']);
+const emit = defineEmits<{
+  close: [];
+  book: [packageId: string, detail: { employeePayment: number; totalPrice: number; enterpriseCoverage: number; selectedCount: number }];
+}>();
 
 const packageStore = usePackageStore();
 
@@ -260,7 +263,14 @@ const employeePayment = computed(() => {
 });
 
 function handleConfirm() {
-  emit('book', props.packageId);
+  emit('book', props.packageId, {
+    employeePayment: employeePayment.value,
+    totalPrice: calculatedPrice.value,
+    enterpriseCoverage: pkg.value?.isGroupPackage
+      ? Math.min(pkg.value.enterpriseBudget || 1000, standardTotal.value + aiAddonDiscountedTotal.value)
+      : 0,
+    selectedCount: selectedCount.value,
+  });
 }
 </script>
 

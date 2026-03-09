@@ -262,16 +262,11 @@ export async function qwenDocStream(
   // 1. 上传文件获取 file_id
   const fileId = await uploadFileToQwen(fileBase64, fileName || 'report.pdf');
 
-  // 2. 使用 fileid:// 协议引用文件
+  // 2. qwen-long 模型通过 system message 字符串引用文件
   const messages: QwenMessage[] = [
     {
       role: 'system',
-      content: [
-        {
-          type: 'file',
-          file_url: { url: `fileid://${fileId}` },
-        },
-      ],
+      content: `fileid://${fileId}`,
     },
     {
       role: 'user',

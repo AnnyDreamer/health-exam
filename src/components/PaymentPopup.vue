@@ -11,7 +11,7 @@
           <CreditCard :size="24" color="#0D9488" />
         </view>
         <text class="pay-title">确认支付</text>
-        <text class="pay-subtitle">AI 个性化加项超出企业额度部分需员工自付</text>
+        <text class="pay-subtitle">{{ isGroup ? 'AI 个性化加项超出企业额度部分需员工自付' : '请确认支付体检套餐费用' }}</text>
       </view>
 
       <!-- 费用明细 -->
@@ -20,14 +20,16 @@
           <text class="detail-label">套餐总费用</text>
           <text class="detail-value">¥{{ totalPrice.toLocaleString() }}</text>
         </view>
-        <view class="detail-row">
-          <text class="detail-label">企业额度抵扣</text>
-          <text class="detail-value detail-value--green">-¥{{ enterpriseCoverage.toLocaleString() }}</text>
-        </view>
-        <view v-if="discount" class="detail-row">
-          <text class="detail-label">AI加项折扣</text>
-          <text class="detail-value detail-value--green">{{ Math.round(discount * 100) / 10 }}折</text>
-        </view>
+        <template v-if="isGroup">
+          <view class="detail-row">
+            <text class="detail-label">企业额度抵扣</text>
+            <text class="detail-value detail-value--green">-¥{{ (enterpriseCoverage || 0).toLocaleString() }}</text>
+          </view>
+          <view v-if="discount" class="detail-row">
+            <text class="detail-label">AI加项折扣</text>
+            <text class="detail-value detail-value--green">{{ Math.round(discount * 100) / 10 }}折</text>
+          </view>
+        </template>
         <view class="detail-divider"></view>
         <view class="detail-row detail-row--total">
           <text class="detail-label--total">需支付</text>
@@ -56,13 +58,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { CreditCard, Wallet } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
   visible: boolean;
   amount: number;
   totalPrice: number;
-  enterpriseCoverage: number;
+  enterpriseCoverage?: number;
   discount?: number;
 }>();
 
@@ -70,6 +73,8 @@ const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'confirm'): void;
 }>();
+
+const isGroup = computed(() => (props.enterpriseCoverage || 0) > 0);
 
 function handlePay() {
   emit('confirm');

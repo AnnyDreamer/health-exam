@@ -71,12 +71,23 @@
       </view>
       <ChevronRight :size="16" color="#C4C4C4" />
     </view>
+
+    <view class="action-item" @tap="$emit('interpretReport')">
+      <view class="action-icon green-bg">
+        <FileSearch :size="18" color="#059669" />
+      </view>
+      <view class="action-text-area">
+        <text class="action-title">报告解读</text>
+        <text class="action-desc">上传报告，AI 为您逐项分析</text>
+      </view>
+      <ChevronRight :size="16" color="#C4C4C4" />
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ShieldAlert, ClipboardList, ChevronRight } from 'lucide-vue-next';
+import { ShieldAlert, ClipboardList, FileSearch, ChevronRight } from 'lucide-vue-next';
 import type { HealthIndicator } from '@/types/health';
 
 const props = defineProps<{
@@ -87,7 +98,7 @@ const props = defineProps<{
   lastDate: string;
 }>();
 
-defineEmits(['viewRisk', 'makePackage', 'viewReport']);
+defineEmits(['viewRisk', 'makePackage', 'viewReport', 'interpretReport']);
 
 const MAX_ABNORMAL_DISPLAY = 4;
 
@@ -305,6 +316,7 @@ const ringTrackColor = computed(() => {
 
 .yellow-bg { background: #FEF3C7; }
 .teal-bg { background: #F0FDFA; }
+.green-bg { background: #D1FAE5; }
 
 .action-text-area {
   flex: 1;

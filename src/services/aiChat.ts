@@ -121,8 +121,8 @@ JSON 格式如下：
   "name": "套餐名称",
   "badge": "AI定制",
   "items": [
-    {"name": "项目1", "reason": "推荐理由"},
-    {"name": "项目2", "reason": "推荐理由"}
+    {"name": "项目1", "price": 180, "reason": "推荐理由"},
+    {"name": "项目2", "price": 120, "reason": "推荐理由"}
   ],
   "totalPrice": 1280,
   "originalPrice": 1580,
@@ -130,7 +130,8 @@ JSON 格式如下：
 }
 
 请确保：
-- items 数组包含 5-10 个体检项目，每项都有 name 和 reason 字段
+- items 数组包含 5-10 个体检项目，每项都有 name、price 和 reason 字段
+- 每个 price 应为该单项的参考市场价格（单位：元），所有 price 之和应等于 originalPrice
 - totalPrice 应在用户预算范围内
 - originalPrice 应略高于 totalPrice
 - reason 必须使用 markdown 格式，结构清晰。格式要求：

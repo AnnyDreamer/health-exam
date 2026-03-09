@@ -123,6 +123,7 @@
             @view-report="handleTabChange('health')"
             @view-risk="enterChat('view-risk')"
             @make-package="enterChat('make-package')"
+            @interpret-report="enterChat('report-interpret')"
           />
         </view>
 
@@ -336,10 +337,10 @@
 
     <PaymentPopup
       :visible="showPayment"
-      :amount="groupPaymentAmount"
-      :total-price="groupTotalPrice"
-      :enterprise-coverage="groupEnterpriseCoverage"
-      :discount="groupDiscount"
+      :amount="paymentAmount"
+      :total-price="paymentTotalPrice"
+      :enterprise-coverage="paymentEnterpriseCoverage"
+      :discount="paymentDiscount"
       @close="showPayment = false"
       @confirm="handlePaymentConfirm"
     />
@@ -507,10 +508,10 @@ const pendingDateTime = ref<{ date: string; time: string } | null>(null);
 
 // 支付弹窗
 const showPayment = ref(false);
-const groupPaymentAmount = ref(0);
-const groupTotalPrice = ref(0);
-const groupEnterpriseCoverage = ref(0);
-const groupDiscount = ref(0.85);
+const paymentAmount = ref(0);
+const paymentTotalPrice = ref(0);
+const paymentEnterpriseCoverage = ref(0);
+const paymentDiscount = ref(0.85);
 
 // 套餐弹窗
 const showPackagePopup = ref(false);
@@ -690,11 +691,20 @@ function openPackagePopup(id: string) {
   showPackagePopup.value = true;
 }
 
-function handlePopupBook(packageId: string) {
+function handlePopupBook(packageId: string, detail?: { employeePayment: number; totalPrice: number; enterpriseCoverage: number; selectedCount: number }) {
   showPackagePopup.value = false;
   // 记住当前套餐信息（团检需要用到）
   const pkgStore = usePackageStore();
   pendingGroupPkg.value = pkgStore.currentPackage;
+  // 用 popup 实时计算的值覆盖
+  if (detail && pendingGroupPkg.value) {
+    pendingGroupPkg.value = {
+      ...pendingGroupPkg.value,
+      employeePayment: detail.employeePayment,
+      totalPrice: detail.totalPrice,
+      enterpriseCoverage: detail.enterpriseCoverage,
+    };
+  }
   const msg = chatStore.messages.find(m => m.packageCard?.id === packageId);
   if (msg?.packageCard) {
     pendingPackageCard.value = msg.packageCard;
@@ -713,45 +723,66 @@ async function handleDateTimeConfirm(data: { date: string; time: string }) {
   showDatePicker.value = false;
   pendingDateTime.value = data;
 
-  // 团检且员工自付 > 0 → 弹支付窗
+  // 团检套餐
   if (pendingGroupPkg.value?.isGroupPackage) {
+    const payment = pendingGroupPkg.value.employeePayment || 0;
     const budget = pendingGroupPkg.value.enterpriseBudget || 1000;
     const total = pendingGroupPkg.value.totalPrice || 0;
-    const payment = Math.max(0, total - budget);
     if (payment > 0) {
-      groupPaymentAmount.value = payment;
-      groupTotalPrice.value = total;
-      groupEnterpriseCoverage.value = Math.min(budget, total);
-      groupDiscount.value = pendingGroupPkg.value.aiAddonDiscount || 0.85;
+      paymentAmount.value = payment;
+      paymentTotalPrice.value = total;
+      paymentEnterpriseCoverage.value = pendingGroupPkg.value.enterpriseCoverage || Math.min(budget, total);
+      paymentDiscount.value = pendingGroupPkg.value.aiAddonDiscount || 0.85;
       showPayment.value = true;
       return;
     }
     // 自付为 0，直接预约
-    await completeGroupBooking(data);
+    await completeBooking(data);
     return;
   }
 
-  if (!pendingPackageCard.value) return;
-  await chatStore.bookFromChat(pendingPackageCard.value, data.date, data.time);
-  pendingPackageCard.value = null;
-  scrollToBottom();
+  // 普通套餐：totalPrice > 0 时弹支付
+  if (pendingPackageCard.value) {
+    const total = pendingGroupPkg.value?.totalPrice || pendingPackageCard.value.totalPrice || 0;
+    if (total > 0) {
+      paymentAmount.value = total;
+      paymentTotalPrice.value = total;
+      paymentEnterpriseCoverage.value = 0;
+      paymentDiscount.value = 0;
+      showPayment.value = true;
+      return;
+    }
+    // 免费套餐（如复查），直接预约
+    await completeBooking(data);
+    return;
+  }
 }
 
 async function handlePaymentConfirm() {
   showPayment.value = false;
   if (!pendingDateTime.value) return;
-  await completeGroupBooking(pendingDateTime.value);
+  await completeBooking(pendingDateTime.value);
 }
 
-async function completeGroupBooking(data: { date: string; time: string }) {
-  const appointmentStore = useAppointmentStore();
-  const packageId = pendingGroupPkg.value?.id || pendingPackageCard.value?.id || 'pkg-group-001';
-  await appointmentStore.create({ packageId, date: data.date, time: data.time });
-  userStore.confirmGroupPackage();
-  pendingPackageCard.value = null;
-  pendingGroupPkg.value = null;
-  pendingDateTime.value = null;
-  uni.navigateTo({ url: '/pages/appointment/index' });
+async function completeBooking(data: { date: string; time: string }) {
+  const isGroup = pendingGroupPkg.value?.isGroupPackage;
+
+  if (isGroup) {
+    const appointmentStore = useAppointmentStore();
+    const packageId = pendingGroupPkg.value?.id || pendingPackageCard.value?.id || 'pkg-group-001';
+    await appointmentStore.create({ packageId, date: data.date, time: data.time });
+    userStore.confirmGroupPackage();
+    pendingPackageCard.value = null;
+    pendingGroupPkg.value = null;
+    pendingDateTime.value = null;
+    uni.navigateTo({ url: '/pages/appointment/index' });
+  } else if (pendingPackageCard.value) {
+    await chatStore.bookFromChat(pendingPackageCard.value, data.date, data.time);
+    pendingPackageCard.value = null;
+    pendingGroupPkg.value = null;
+    pendingDateTime.value = null;
+    scrollToBottom();
+  }
 }
 
 function handleNewChat() {
