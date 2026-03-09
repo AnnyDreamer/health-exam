@@ -1,0 +1,19 @@
+{
+  "pages": [
+    { "path": "pages/auth/login", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/ai/chat", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/report/detail", "style": { "navigationBarTitleText": "健康报告" } },
+    { "path": "pages/package/list", "style": { "navigationBarTitleText": "体检套餐" } },
+    { "path": "pages/package/detail", "style": { "navigationBarTitleText": "套餐详情", "navigationStyle": "custom" } },
+    { "path": "pages/package/customize", "style": { "navigationBarTitleText": "自定义套餐" } },
+    { "path": "pages/appointment/index", "style": { "navigationBarTitleText": "我的预约" } },
+    { "path": "pages/appointment/detail", "style": { "navigationBarTitleText": "预约详情" } },
+    { "path": "pages/user/profile", "style": { "navigationBarTitleText": "个人中心" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#F8FAF9",
+    "backgroundColor": "#F8FAF9",
+    "navigationStyle": "default"
+  }
+}
