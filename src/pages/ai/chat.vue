@@ -195,6 +195,17 @@
             <view class="chat-divider-line"></view>
           </view>
 
+          <!-- 引导流程进度条 -->
+          <view v-if="chatStore.guidedStep > 0" class="guided-progress">
+            <view class="progress-info">
+              <text class="progress-label">问题进度</text>
+              <text class="progress-count">{{ chatStore.guidedStep }}/{{ chatStore.GUIDED_TOTAL_STEPS }}</text>
+            </view>
+            <view class="progress-track">
+              <view class="progress-fill" :style="{ width: (chatStore.guidedStep / chatStore.GUIDED_TOTAL_STEPS * 100) + '%' }"></view>
+            </view>
+          </view>
+
           <view v-for="msg in chatStore.messages" :key="msg.id" :id="'m-' + msg.id">
             <ChatBubble :role="msg.role" :content="msg.content" :content-type="msg.contentType">
               <template v-if="msg.contentType === 'image' && msg.imageUrl">
@@ -224,7 +235,12 @@
                   :items="msg.packageCard.items"
                   :total-price="msg.packageCard.totalPrice"
                   :original-price="msg.packageCard.originalPrice"
-                  @confirm="handleBookFromChat(msg.packageCard!)"
+                  :is-group-package="msg.packageCard.isGroupPackage"
+                  :enterprise-budget="msg.packageCard.enterpriseBudget"
+                  :enterprise-coverage="msg.packageCard.enterpriseCoverage"
+                  :employee-payment="msg.packageCard.employeePayment"
+                  :ai-addon-discount="msg.packageCard.aiAddonDiscount"
+                  @confirm="openPackagePopup(msg.packageCard!.id)"
                   @customize="openPackagePopup(msg.packageCard!.id)"
                 />
               </template>
@@ -650,7 +666,8 @@ function handlePopupBook(packageId: string) {
 
 function handleBookFromChat(packageCard: PackageCardData) {
   pendingPackageCard.value = packageCard;
-  showDatePicker.value = true;
+  // 先展示套餐详情弹窗，确认后再选时间
+  openPackagePopup(packageCard.id);
 }
 
 async function handleDateTimeConfirm(data: { date: string; time: string }) {
@@ -1547,6 +1564,51 @@ onShow(() => {
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
   white-space: nowrap;
+}
+
+/* 引导流程进度条 */
+.guided-progress {
+  margin: 8px 0 4px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  border: 1px solid rgba(13, 148, 136, 0.12);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.progress-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.progress-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "DM Sans", sans-serif;
+}
+
+.progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(13, 148, 136, 0.1);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  transition: width 0.3s ease;
 }
 
 /* 对话消息区 */

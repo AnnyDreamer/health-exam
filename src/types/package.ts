@@ -18,4 +18,10 @@ export interface ExamPackage {
   badge?: string;
   isGroupPackage?: boolean;
   notice?: string[];
+  enterpriseBudget?: number;
+  enterpriseCoverage?: number;
+  employeePayment?: number;
+  aiAddonDiscount?: number;
+  aiAddonOriginalPrice?: number;
+  aiAddonDiscountedPrice?: number;
 }

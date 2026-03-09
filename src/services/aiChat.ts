@@ -120,20 +120,61 @@ JSON 格式如下：
 {
   "name": "套餐名称",
   "badge": "AI定制",
-  "items": ["项目1", "项目2", "项目3"],
+  "items": [
+    {"name": "项目1", "reason": "推荐理由"},
+    {"name": "项目2", "reason": "推荐理由"}
+  ],
   "totalPrice": 1280,
   "originalPrice": 1580,
   "reason": "详细的推荐理由"
 }
 
 请确保：
-- items 数组包含 5-10 个体检项目
+- items 数组包含 5-10 个体检项目，每项都有 name 和 reason 字段
 - totalPrice 应在用户预算范围内
 - originalPrice 应略高于 totalPrice
 - reason 必须使用 markdown 格式，结构清晰。格式要求：
   先用一句话总结方案定位，然后用列表逐条说明每个检查项目对应哪个风险指标，格式如：
   "根据您的健康数据，为您定制以下方案：\n\n- **心脏彩超、颈动脉彩超** ← 血压偏高(128/82)，排查血管病变\n- **血脂全套、同型半胱氨酸** ← 血脂三项超标，监测动脉硬化风险\n- **甲状腺功能全套、甲状腺彩超** ← TSH偏高，排查甲状腺功能异常\n\n整体方案覆盖您的主要风险点，帮助早发现早干预。"
   每条用 ← 箭头连接"检查项目"和"对应的风险原因"，让用户一目了然`;
+
+/** 团检套餐推荐系统提示词 */
+const GROUP_PACKAGE_SYSTEM_PROMPT = `你是一位专业的企业团检套餐推荐AI助手。用户是企业团检员工，企业提供1000元体检额度。
+你需要推荐包含"标准项目"和"AI个性化加项"的体检方案。
+
+规则：
+- 标准项目（category: "standard"）：企业标配的常规检查，由企业额度支付
+- AI个性化加项（category: "ai-addon"）：根据用户健康状况个性化推荐，享受85折优惠
+- 企业额度1000元优先覆盖标准项目，剩余额度可抵扣AI加项
+- 超出企业额度的部分由员工自付
+
+你必须严格以 JSON 格式返回推荐结果，不要包含任何其他文字或 markdown 代码块标记。
+JSON 格式如下：
+{
+  "name": "企业健康体检方案",
+  "badge": "团检",
+  "items": [
+    {"name": "一般检查", "category": "standard", "price": 80, "reason": "基础体格检查"},
+    {"name": "甲状腺彩超", "category": "ai-addon", "price": 180, "reason": "根据健康数据推荐"}
+  ],
+  "standardTotal": 680,
+  "aiAddonTotal": 520,
+  "aiAddonDiscount": 0.85,
+  "totalPrice": 1122,
+  "originalPrice": 1200,
+  "enterpriseCoverage": 1000,
+  "employeePayment": 122,
+  "reason": "推荐理由"
+}
+
+请确保：
+- items 中每项都有 name、category、price、reason 字段
+- standardTotal 是所有 standard 项目价格之和
+- aiAddonTotal 是所有 ai-addon 项目原价之和
+- AI加项折后价 = aiAddonTotal * aiAddonDiscount
+- enterpriseCoverage = min(1000, standardTotal + AI加项折后价)
+- employeePayment = standardTotal + AI加项折后价 - enterpriseCoverage
+- totalPrice = standardTotal + AI加项折后价`;
 
 /** 对话历史最大保留条数 */
 const MAX_HISTORY_LENGTH = 20;
@@ -183,7 +224,7 @@ export async function sendChatMessage(
   return qwenChatStream(builtMessages, onChunk);
 }
 
-export { GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT };
+export { GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT };
 
 /**
  * 多模态报告解读（流式）

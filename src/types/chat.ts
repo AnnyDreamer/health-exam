@@ -30,6 +30,11 @@ export interface PackageCardData {
   items: (string | PackageItemWithReason)[];
   totalPrice: number;
   originalPrice?: number;
+  isGroupPackage?: boolean;
+  enterpriseBudget?: number;
+  enterpriseCoverage?: number;
+  employeePayment?: number;
+  aiAddonDiscount?: number;
 }
 
 /** 复查方案项目 */

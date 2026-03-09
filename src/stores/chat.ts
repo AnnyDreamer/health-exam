@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import type { ChatMessage, ChatOption, QwenMessage, PackageCardData, FollowUpPlan } from '@/types/chat';
 import type { ExamPackage } from '@/types/package';
 import { isQwenAvailable } from '@/api/qwen';
-import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT } from '@/services/aiChat';
+import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT } from '@/services/aiChat';
 import { useUserStore } from '@/stores/user';
 import { useHealthStore } from '@/stores/health';
 import { useAppointmentStore } from '@/stores/appointment';
@@ -39,21 +39,29 @@ function savePackageToStore(packageCard: PackageCardData) {
   const examPackage: ExamPackage = {
     id: packageCard.id,
     name: packageCard.name,
-    description: `AI 为您量身定制的体检方案`,
+    description: packageCard.isGroupPackage ? '企业团检 AI 定制方案' : 'AI 为您量身定制的体检方案',
     badge: packageCard.badge || 'AI定制',
     items: packageCard.items.map((item, index) => {
       const itemName = typeof item === 'string' ? item : item.name;
       const aiReason = typeof item === 'string' ? undefined : item.reason;
+      const category = typeof item === 'string' ? undefined : (item as any).category;
+      const price = typeof item === 'string' ? 0 : ((item as any).price || 0);
       return {
         id: `item-ai-${index}`,
         name: itemName,
         description: '',
-        price: 0,
+        price,
         aiReason,
+        category,
       };
     }),
     totalPrice: packageCard.totalPrice,
     originalPrice: packageCard.originalPrice,
+    isGroupPackage: packageCard.isGroupPackage,
+    enterpriseBudget: packageCard.enterpriseBudget,
+    enterpriseCoverage: packageCard.enterpriseCoverage,
+    employeePayment: packageCard.employeePayment,
+    aiAddonDiscount: packageCard.aiAddonDiscount,
     notice: [
       '体检前一天请清淡饮食，晚上10点后禁食禁水',
       '体检当天空腹前往',
@@ -111,6 +119,9 @@ const makePackageWithDataScript: ScriptStep[] = [
   },
 ];
 
+/** 引导流程总步数 */
+const GUIDED_TOTAL_STEPS = 10;
+
 /** 无数据用户分步引导脚本 */
 const makePackageGuidedScript: ScriptStep[] = [
   {
@@ -139,6 +150,56 @@ const makePackageGuidedScript: ScriptStep[] = [
       { label: '三高相关', value: 'guided_concern_metabolic' },
       { label: '消化系统', value: 'guided_concern_digest' },
       { label: '颈椎/腰椎', value: 'guided_concern_spine' },
+    ],
+  },
+  {
+    aiMessage: '你的 **家族** 有没有什么遗传性疾病？',
+    contentType: 'options',
+    options: [
+      { label: '没有', value: 'guided_family_none' },
+      { label: '高血压', value: 'guided_family_hypertension' },
+      { label: '糖尿病', value: 'guided_family_diabetes' },
+      { label: '癌症家族史', value: 'guided_family_cancer' },
+    ],
+  },
+  {
+    aiMessage: '你的 **职业类型** 是？',
+    contentType: 'options',
+    options: [
+      { label: '办公室久坐', value: 'guided_job_office' },
+      { label: '体力劳动', value: 'guided_job_labor' },
+      { label: '经常出差', value: 'guided_job_travel' },
+      { label: '户外作业', value: 'guided_job_outdoor' },
+    ],
+  },
+  {
+    aiMessage: '平时 **运动** 频率怎么样？',
+    contentType: 'options',
+    options: [
+      { label: '很少运动', value: 'guided_exercise_rarely' },
+      { label: '每周1-2次', value: 'guided_exercise_1to2' },
+      { label: '每周3次以上', value: 'guided_exercise_3plus' },
+      { label: '每天运动', value: 'guided_exercise_daily' },
+    ],
+  },
+  {
+    aiMessage: '你的 **睡眠质量** 如何？',
+    contentType: 'options',
+    options: [
+      { label: '良好', value: 'guided_sleep_good' },
+      { label: '一般偶尔失眠', value: 'guided_sleep_fair' },
+      { label: '经常失眠', value: 'guided_sleep_poor' },
+      { label: '长期用药助眠', value: 'guided_sleep_medicated' },
+    ],
+  },
+  {
+    aiMessage: '有 **烟酒习惯** 吗？',
+    contentType: 'options',
+    options: [
+      { label: '不吸烟不喝酒', value: 'guided_habit_none' },
+      { label: '吸烟', value: 'guided_habit_smoke' },
+      { label: '饮酒', value: 'guided_habit_drink' },
+      { label: '烟酒都有', value: 'guided_habit_both' },
     ],
   },
   {
@@ -322,7 +383,7 @@ export const useChatStore = defineStore('chat', () => {
   /** AI 回复轮次计数 */
   const aiTurnCount = ref(0);
 
-  /** 引导式套餐定制 - 当前步骤（0=未开始, 1=性别, 2=年龄, 3=健康状况, 4=关注方向, 5=预算, 6=完成） */
+  /** 引导式套餐定制 - 当前步骤（0=未开始, 1~10=各问题, >10=完成） */
   const guidedStep = ref(0);
 
   /** 引导式采集的用户画像 */
@@ -330,6 +391,11 @@ export const useChatStore = defineStore('chat', () => {
     gender?: string;
     ageRange?: string;
     concerns?: string;
+    familyHistory?: string;
+    jobType?: string;
+    exercise?: string;
+    sleepQuality?: string;
+    habits?: string;
     focus?: string;
     budget?: 'low' | 'mid' | 'high';
   }>({});
@@ -656,42 +722,88 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 获取引导步骤对应的选项按钮 */
   function getGuidedStepOptions(step: number): ChatOption[] | null {
-    switch (step) {
-      case 1: // 性别
-        return [
-          { label: '男性', value: 'guided_gender_male' },
-          { label: '女性', value: 'guided_gender_female' },
-        ];
-      case 2: // 年龄段
-        return [
-          { label: '30岁以下', value: 'guided_age_under30' },
-          { label: '30-45岁', value: 'guided_age_30to45', primary: true },
-          { label: '45-60岁', value: 'guided_age_45to60' },
-          { label: '60岁以上', value: 'guided_age_over60' },
-        ];
-      case 3: // 健康状况
-        return [
-          { label: '没有特殊情况', value: 'guided_concern_none' },
-          { label: '三高相关', value: 'guided_concern_metabolic' },
-          { label: '消化系统', value: 'guided_concern_digest' },
-          { label: '颈椎/腰椎', value: 'guided_concern_spine' },
-        ];
-      case 4: // 关注方向
-        return [
-          { label: '全面筛查', value: 'guided_focus_comprehensive', primary: true },
-          { label: '心脑血管', value: 'guided_focus_cardio' },
-          { label: '肿瘤早筛', value: 'guided_focus_tumor' },
-          { label: '职场亚健康', value: 'guided_focus_office' },
-        ];
-      case 5: // 预算
-        return [
-          { label: '1000以下', value: 'guided_budget_low' },
-          { label: '1000-2000', value: 'guided_budget_mid', primary: true },
-          { label: '2000以上', value: 'guided_budget_high' },
-        ];
-      default:
-        return null;
+    const options: ChatOption[] | null = (() => {
+      switch (step) {
+        case 1: // 性别
+          return [
+            { label: '男性', value: 'guided_gender_male' },
+            { label: '女性', value: 'guided_gender_female' },
+          ];
+        case 2: // 年龄段
+          return [
+            { label: '30岁以下', value: 'guided_age_under30' },
+            { label: '30-45岁', value: 'guided_age_30to45', primary: true },
+            { label: '45-60岁', value: 'guided_age_45to60' },
+            { label: '60岁以上', value: 'guided_age_over60' },
+          ];
+        case 3: // 健康状况
+          return [
+            { label: '没有特殊情况', value: 'guided_concern_none' },
+            { label: '三高相关', value: 'guided_concern_metabolic' },
+            { label: '消化系统', value: 'guided_concern_digest' },
+            { label: '颈椎/腰椎', value: 'guided_concern_spine' },
+          ];
+        case 4: // 家族病史
+          return [
+            { label: '没有', value: 'guided_family_none' },
+            { label: '高血压', value: 'guided_family_hypertension' },
+            { label: '糖尿病', value: 'guided_family_diabetes' },
+            { label: '癌症家族史', value: 'guided_family_cancer' },
+          ];
+        case 5: // 职业类型
+          return [
+            { label: '办公室久坐', value: 'guided_job_office' },
+            { label: '体力劳动', value: 'guided_job_labor' },
+            { label: '经常出差', value: 'guided_job_travel' },
+            { label: '户外作业', value: 'guided_job_outdoor' },
+          ];
+        case 6: // 运动习惯
+          return [
+            { label: '很少运动', value: 'guided_exercise_rarely' },
+            { label: '每周1-2次', value: 'guided_exercise_1to2' },
+            { label: '每周3次以上', value: 'guided_exercise_3plus' },
+            { label: '每天运动', value: 'guided_exercise_daily' },
+          ];
+        case 7: // 睡眠质量
+          return [
+            { label: '良好', value: 'guided_sleep_good' },
+            { label: '一般偶尔失眠', value: 'guided_sleep_fair' },
+            { label: '经常失眠', value: 'guided_sleep_poor' },
+            { label: '长期用药助眠', value: 'guided_sleep_medicated' },
+          ];
+        case 8: // 烟酒习惯
+          return [
+            { label: '不吸烟不喝酒', value: 'guided_habit_none' },
+            { label: '吸烟', value: 'guided_habit_smoke' },
+            { label: '饮酒', value: 'guided_habit_drink' },
+            { label: '烟酒都有', value: 'guided_habit_both' },
+          ];
+        case 9: // 关注方向
+          return [
+            { label: '全面筛查', value: 'guided_focus_comprehensive', primary: true },
+            { label: '心脑血管', value: 'guided_focus_cardio' },
+            { label: '肿瘤早筛', value: 'guided_focus_tumor' },
+            { label: '职场亚健康', value: 'guided_focus_office' },
+          ];
+        case 10: // 预算
+          return [
+            { label: '1000以下', value: 'guided_budget_low' },
+            { label: '1000-2000', value: 'guided_budget_mid', primary: true },
+            { label: '2000以上', value: 'guided_budget_high' },
+          ];
+        default:
+          return null;
+      }
+    })();
+
+    if (!options) return null;
+
+    // 回答 3 题后追加"提前结束"选项
+    if (step >= 4 && step <= GUIDED_TOTAL_STEPS) {
+      options.push({ label: '跳过，直接生成方案', value: 'guided_early_finish' });
     }
+
+    return options;
   }
 
   /** 根据当前对话上下文生成快捷选项 */
@@ -700,7 +812,7 @@ export const useChatStore = defineStore('chat', () => {
     if (afterPackage) return null;
 
     // 引导式流程中，返回当前步骤对应的选项
-    if (guidedStep.value > 0 && guidedStep.value <= 5) {
+    if (guidedStep.value > 0 && guidedStep.value <= GUIDED_TOTAL_STEPS) {
       return getGuidedStepOptions(guidedStep.value);
     }
 
@@ -778,13 +890,57 @@ export const useChatStore = defineStore('chat', () => {
   const guidedStepPrompts: Record<number, string> = {
     2: '好的，我已告知性别。请接下来只问我一个问题：我的年龄段是什么？不要问其他问题。',
     3: '好的，我已告知年龄段。请接下来只问我一个问题：我近期有没有什么健康不适或慢性病？不要问其他问题。',
-    4: '好的，我已告知健康状况。请接下来只问我一个问题：这次体检我主要关注什么方向？不要问其他问题。',
-    5: '好的，我已告知关注方向。请接下来只问我最后一个问题：我的体检预算大概多少？不要问其他问题。',
+    4: '好的，我已告知健康状况。请接下来只问我一个问题：我的家族有没有遗传性疾病？不要问其他问题。',
+    5: '好的，我已告知家族病史。请接下来只问我一个问题：我的职业类型是什么？不要问其他问题。',
+    6: '好的，我已告知职业类型。请接下来只问我一个问题：我平时运动频率怎么样？不要问其他问题。',
+    7: '好的，我已告知运动习惯。请接下来只问我一个问题：我的睡眠质量如何？不要问其他问题。',
+    8: '好的，我已告知睡眠质量。请接下来只问我一个问题：我有没有烟酒习惯？不要问其他问题。',
+    9: '好的，我已告知烟酒习惯。请接下来只问我一个问题：这次体检我主要关注什么方向？不要问其他问题。',
+    10: '好的，我已告知关注方向。请接下来只问我最后一个问题：我的体检预算大概多少？不要问其他问题。',
   };
+
+  /** 构建引导式画像汇总文本 */
+  function buildGuidedProfileSummary(): string {
+    const p = guidedProfile.value;
+    const parts: string[] = [];
+    if (p.gender) parts.push(`性别${p.gender}`);
+    if (p.ageRange) parts.push(`年龄段${p.ageRange}`);
+    if (p.concerns) parts.push(`健康状况：${p.concerns}`);
+    if (p.familyHistory) parts.push(`家族病史：${p.familyHistory}`);
+    if (p.jobType) parts.push(`职业类型：${p.jobType}`);
+    if (p.exercise) parts.push(`运动习惯：${p.exercise}`);
+    if (p.sleepQuality) parts.push(`睡眠质量：${p.sleepQuality}`);
+    if (p.habits) parts.push(`烟酒习惯：${p.habits}`);
+    if (p.focus) parts.push(`关注方向：${p.focus}`);
+    return parts.join('，');
+  }
+
+  /** 提前结束引导流程，直接生成套餐 */
+  async function handleGuidedEarlyFinish() {
+    const profile = guidedProfile.value;
+    const summary = buildGuidedProfileSummary();
+    guidedStep.value = 0;
+
+    conversationHistory.value.push({
+      role: 'user',
+      content: `我已经提供了足够信息，请直接生成方案。我的信息汇总：${summary}`,
+    });
+
+    await handlePackageRecommendation(
+      `我的信息：${summary}，预算：1000-2000元`,
+      profile.budget || 'mid',
+    );
+  }
 
   /** 处理引导式流程中用户选择的选项 */
   async function handleGuidedStep(content: string, value: string) {
     const step = guidedStep.value;
+
+    // 提前结束
+    if (value === 'guided_early_finish') {
+      await handleGuidedEarlyFinish();
+      return;
+    }
 
     // 解析用户选择并存入 profile
     if (value.startsWith('guided_gender_')) {
@@ -805,6 +961,46 @@ export const useChatStore = defineStore('chat', () => {
         'guided_concern_spine': '颈椎/腰椎问题',
       };
       guidedProfile.value.concerns = concernMap[value] || '';
+    } else if (value.startsWith('guided_family_')) {
+      const familyMap: Record<string, string> = {
+        'guided_family_none': '没有',
+        'guided_family_hypertension': '高血压家族史',
+        'guided_family_diabetes': '糖尿病家族史',
+        'guided_family_cancer': '癌症家族史',
+      };
+      guidedProfile.value.familyHistory = familyMap[value] || '';
+    } else if (value.startsWith('guided_job_')) {
+      const jobMap: Record<string, string> = {
+        'guided_job_office': '办公室久坐',
+        'guided_job_labor': '体力劳动',
+        'guided_job_travel': '经常出差',
+        'guided_job_outdoor': '户外作业',
+      };
+      guidedProfile.value.jobType = jobMap[value] || '';
+    } else if (value.startsWith('guided_exercise_')) {
+      const exerciseMap: Record<string, string> = {
+        'guided_exercise_rarely': '很少运动',
+        'guided_exercise_1to2': '每周1-2次',
+        'guided_exercise_3plus': '每周3次以上',
+        'guided_exercise_daily': '每天运动',
+      };
+      guidedProfile.value.exercise = exerciseMap[value] || '';
+    } else if (value.startsWith('guided_sleep_')) {
+      const sleepMap: Record<string, string> = {
+        'guided_sleep_good': '良好',
+        'guided_sleep_fair': '一般偶尔失眠',
+        'guided_sleep_poor': '经常失眠',
+        'guided_sleep_medicated': '长期用药助眠',
+      };
+      guidedProfile.value.sleepQuality = sleepMap[value] || '';
+    } else if (value.startsWith('guided_habit_')) {
+      const habitMap: Record<string, string> = {
+        'guided_habit_none': '不吸烟不喝酒',
+        'guided_habit_smoke': '吸烟',
+        'guided_habit_drink': '饮酒',
+        'guided_habit_both': '烟酒都有',
+      };
+      guidedProfile.value.habits = habitMap[value] || '';
     } else if (value.startsWith('guided_focus_')) {
       const focusMap: Record<string, string> = {
         'guided_focus_comprehensive': '全面筛查',
@@ -826,19 +1022,18 @@ export const useChatStore = defineStore('chat', () => {
     guidedStep.value = step + 1;
 
     // 如果是最后一步（预算），直接生成套餐推荐
-    if (guidedStep.value > 5) {
+    if (guidedStep.value > GUIDED_TOTAL_STEPS) {
       guidedStep.value = 0; // 引导结束
-      // 构建用户画像并推荐套餐
-      const userStore = useUserStore();
       const profile = guidedProfile.value;
+      const summary = buildGuidedProfileSummary();
 
       conversationHistory.value.push({
         role: 'user',
-        content: `${content}。我的信息汇总：性别${profile.gender}，年龄段${profile.ageRange}，健康状况：${profile.concerns}，关注方向：${profile.focus}，预算：${content}`,
+        content: `${content}。我的信息汇总：${summary}，预算：${content}`,
       });
 
       await handlePackageRecommendation(
-        `我的信息：性别${profile.gender}，年龄段${profile.ageRange}，健康状况：${profile.concerns}，关注方向：${profile.focus}，预算：${content}`,
+        `我的信息：${summary}，预算：${content}`,
         profile.budget || 'mid',
       );
       return;
@@ -978,7 +1173,12 @@ export const useChatStore = defineStore('chat', () => {
     // 根据场景选择系统提示词
     let systemPrompt: string | undefined;
     if (key === 'make-package') {
-      systemPrompt = hasHealthData ? MAKE_PACKAGE_WITH_DATA_PROMPT : GUIDED_PACKAGE_SYSTEM_PROMPT;
+      const userStore = useUserStore();
+      if (userStore.userInfo?.hasGroupPackage) {
+        systemPrompt = MAKE_PACKAGE_WITH_DATA_PROMPT; // 团检有数据用户也用数据分析提示词
+      } else {
+        systemPrompt = hasHealthData ? MAKE_PACKAGE_WITH_DATA_PROMPT : GUIDED_PACKAGE_SYSTEM_PROMPT;
+      }
     }
     await sendAIStream(conversationHistory.value, systemPrompt);
     aiTurnCount.value++;
@@ -1088,6 +1288,7 @@ export const useChatStore = defineStore('chat', () => {
       // 收集健康数据传给套餐推荐
       const healthStore = useHealthStore();
       const userStore = useUserStore();
+      const isGroupUser = userStore.userInfo?.hasGroupPackage || false;
       const healthIndicators = healthStore.indicators
         .map((ind) => `${ind.name}${ind.value}(${ind.label})`)
         ;
@@ -1129,7 +1330,7 @@ export const useChatStore = defineStore('chat', () => {
         contentType: 'text',
       });
 
-      // 再添加套餐卡片
+      // 构建套餐卡片数据
       const packageData: PackageCardData = {
         id: `pkg-ai-${Date.now()}`,
         name: result.name,
@@ -1138,6 +1339,28 @@ export const useChatStore = defineStore('chat', () => {
         totalPrice: result.totalPrice,
         originalPrice: result.originalPrice,
       };
+
+      // 团检用户：计算企业承担/员工自付/折扣
+      if (isGroupUser) {
+        const enterpriseBudget = 1000;
+        // 根据 AI 返回的结构化数据或 fallback 计算
+        const aiResult = result as any;
+        const standardTotal = aiResult.standardTotal || Math.round(result.totalPrice * 0.6);
+        const aiAddonTotal = aiResult.aiAddonTotal || (result.totalPrice - standardTotal);
+        const discount = aiResult.aiAddonDiscount || 0.85;
+        const aiAddonDiscounted = Math.round(aiAddonTotal * discount);
+        const totalAfterDiscount = standardTotal + aiAddonDiscounted;
+        const enterpriseCoverage = Math.min(enterpriseBudget, totalAfterDiscount);
+        const employeePayment = Math.max(0, totalAfterDiscount - enterpriseCoverage);
+
+        packageData.isGroupPackage = true;
+        packageData.badge = '团检';
+        packageData.enterpriseBudget = enterpriseBudget;
+        packageData.enterpriseCoverage = enterpriseCoverage;
+        packageData.employeePayment = employeePayment;
+        packageData.aiAddonDiscount = discount;
+        packageData.totalPrice = totalAfterDiscount;
+      }
 
       // 将 AI 生成的套餐保存到 package store
       savePackageToStore(packageData);
@@ -1150,9 +1373,10 @@ export const useChatStore = defineStore('chat', () => {
       });
 
       // 记录到对话历史
+      const itemNames = result.items.map((i: string | { name: string }) => typeof i === 'string' ? i : i.name);
       conversationHistory.value.push({
         role: 'assistant',
-        content: `${reasonMsg}\n\n推荐套餐：${result.name}，包含${result.items.join('、')}，价格${result.totalPrice}元`,
+        content: `${reasonMsg}\n\n推荐套餐：${result.name}，包含${itemNames.join('、')}，价格${packageData.totalPrice}元`,
       });
       aiTurnCount.value++;
 
@@ -1394,6 +1618,8 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     isTyping,
     streamingMessageId,
+    guidedStep,
+    GUIDED_TOTAL_STEPS,
     reset,
     addMessage,
     startScript,

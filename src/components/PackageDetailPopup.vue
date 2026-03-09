@@ -32,14 +32,14 @@
             </view>
             <view class="items-list">
               <view v-for="item in standardItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
-                <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
-                  <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
-                </view>
-                <view class="item-info">
+                <view class="check-item-top">
+                  <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                    <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
+                  </view>
                   <text class="item-name">{{ item.name }}</text>
-                  <text class="item-desc">{{ item.description }}</text>
+                  <text class="item-price">¥{{ item.price }}</text>
                 </view>
-                <text class="item-price">¥{{ item.price }}</text>
+                <text v-if="item.description" class="item-desc">{{ item.description }}</text>
               </view>
             </view>
 
@@ -58,17 +58,17 @@
               <text class="ai-addon-hint">根据您的健康数据，AI 为您个性化推荐以下加项</text>
               <view class="items-list">
                 <view v-for="item in aiAddonItems" :key="item.id" class="check-item check-item--ai" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
-                  <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
-                    <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
-                  </view>
-                  <view class="item-info">
-                    <text class="item-name">{{ item.name }}</text>
-                    <text class="item-desc">{{ item.description }}</text>
-                    <view v-if="item.aiReason" class="ai-reason">
-                      <text class="ai-reason-text">{{ item.aiReason }}</text>
+                  <view class="check-item-top">
+                    <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                      <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
                     </view>
+                    <text class="item-name">{{ item.name }}</text>
+                    <text class="item-price">¥{{ item.price }}</text>
                   </view>
-                  <text class="item-price">¥{{ item.price }}</text>
+                  <text v-if="item.description" class="item-desc">{{ item.description }}</text>
+                  <view v-if="item.aiReason" class="ai-reason">
+                    <text class="ai-reason-text">{{ item.aiReason }}</text>
+                  </view>
                 </view>
               </view>
             </view>
@@ -78,18 +78,18 @@
           <template v-else>
             <text class="items-title">检查项目 ({{ selectedCount }}/{{ pkg.items.length }}项)</text>
             <view class="items-list">
-              <view v-for="item in pkg.items" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id), 'check-item--has-reason': !!item.aiReason }" @tap="toggleItem(item.id)">
-                <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
-                  <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
-                </view>
-                <view class="item-info">
-                  <text class="item-name">{{ item.name }}</text>
-                  <text v-if="item.description" class="item-desc">{{ item.description }}</text>
-                  <view v-if="item.aiReason" class="ai-reason">
-                    <text class="ai-reason-text">{{ item.aiReason }}</text>
+              <view v-for="item in pkg.items" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+                <view class="check-item-top">
+                  <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                    <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
                   </view>
+                  <text class="item-name">{{ item.name }}</text>
+                  <text class="item-price">¥{{ item.price }}</text>
                 </view>
-                <text class="item-price">¥{{ item.price }}</text>
+                <text v-if="item.description" class="item-desc">{{ item.description }}</text>
+                <view v-if="item.aiReason" class="ai-reason">
+                  <text class="ai-reason-text">{{ item.aiReason }}</text>
+                </view>
               </view>
             </view>
           </template>
@@ -102,23 +102,47 @@
         </view>
 
         <!-- 底部占位，避免被 bottom-bar 遮挡 -->
-        <view style="height: 140px;"></view>
+        <view :style="{ height: (pkg?.isGroupPackage ? 220 : 140) + 'px' }"></view>
       </scroll-view>
 
       <!-- 底部操作栏 -->
       <view class="bottom-bar" v-if="pkg" @touchmove.prevent>
-        <view class="price-section">
-          <view class="price-label-area">
-            <text class="price-label">已选 {{ selectedCount }} 项</text>
-            <view class="orig-price-row" v-if="pkg.originalPrice">
-              <text class="orig-price">原价 ¥{{ pkg.originalPrice.toLocaleString() }}</text>
+        <!-- 团检费用展示 -->
+        <template v-if="pkg.isGroupPackage">
+          <view class="group-bottom-summary">
+            <view class="group-bottom-row">
+              <view class="group-bottom-block">
+                <text class="group-bottom-label">企业预算</text>
+                <text class="group-bottom-value group-bottom-value--ent">¥{{ (pkg.enterpriseBudget || 1000).toLocaleString() }}</text>
+              </view>
+              <text class="group-bottom-plus">+</text>
+              <view class="group-bottom-block">
+                <text class="group-bottom-label">员工自付</text>
+                <text class="group-bottom-value group-bottom-value--emp">¥{{ employeePayment.toLocaleString() }}</text>
+              </view>
+            </view>
+            <view class="group-bottom-tags">
+              <text class="group-bottom-tag">已选 {{ selectedCount }} 项</text>
+              <text v-if="aiAddonDiscountedTotal > 0" class="group-bottom-tag group-bottom-tag--discount">AI加项已享{{ Math.round((pkg.aiAddonDiscount || 0.85) * 100) / 10 }}折</text>
+              <text v-if="aiAddonOriginalTotal > aiAddonDiscountedTotal" class="group-bottom-tag group-bottom-tag--orig">原价 ¥{{ aiAddonOriginalTotal.toLocaleString() }}</text>
             </view>
           </view>
-          <view class="price-value">
-            <text class="price-symbol">¥</text>
-            <text class="price-num">{{ calculatedPrice.toLocaleString() }}</text>
+        </template>
+        <!-- 普通费用展示 -->
+        <template v-else>
+          <view class="price-section">
+            <view class="price-label-area">
+              <text class="price-label">已选 {{ selectedCount }} 项</text>
+              <view class="orig-price-row" v-if="pkg.originalPrice">
+                <text class="orig-price">原价 ¥{{ pkg.originalPrice.toLocaleString() }}</text>
+              </view>
+            </view>
+            <view class="price-value">
+              <text class="price-symbol">¥</text>
+              <text class="price-num">{{ calculatedPrice.toLocaleString() }}</text>
+            </view>
           </view>
-        </view>
+        </template>
         <view class="confirm-btn" @tap="handleConfirm">
           <CalendarCheck :size="18" color="#fff" />
           <text class="confirm-text">立即预约</text>
@@ -207,6 +231,34 @@ const aiAddonItems = computed(() => {
   return pkg.value.items.filter((item) => item.category === 'ai-addon');
 });
 
+// 团检费用计算
+const standardTotal = computed(() => {
+  if (!pkg.value) return 0;
+  return standardItems.value
+    .filter((item) => selectedIds.value.has(item.id))
+    .reduce((sum, item) => sum + (item.price || 0), 0);
+});
+
+const aiAddonOriginalTotal = computed(() => {
+  if (!pkg.value) return 0;
+  return aiAddonItems.value
+    .filter((item) => selectedIds.value.has(item.id))
+    .reduce((sum, item) => sum + (item.price || 0), 0);
+});
+
+const aiAddonDiscountedTotal = computed(() => {
+  const discount = pkg.value?.aiAddonDiscount || 0.85;
+  return Math.round(aiAddonOriginalTotal.value * discount);
+});
+
+const employeePayment = computed(() => {
+  if (!pkg.value?.isGroupPackage) return 0;
+  const budget = pkg.value.enterpriseBudget || 1000;
+  const total = standardTotal.value + aiAddonDiscountedTotal.value;
+  const coverage = Math.min(budget, total);
+  return Math.max(0, total - coverage);
+});
+
 function handleConfirm() {
   emit('book', props.packageId);
 }
@@ -263,6 +315,7 @@ function handleConfirm() {
 .sheet-scroll {
   flex: 1;
   height: 0;
+  overflow: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
@@ -393,26 +446,14 @@ function handleConfirm() {
   line-height: 1.5;
 }
 
-.check-item--has-reason {
-  align-items: flex-start;
-}
-
-.check-item--has-reason .item-price {
-  margin-top: 2px;
-}
-
 .check-item--ai {
-  align-items: flex-start;
   background: rgba(255, 255, 255, 0.33);
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
-.check-item--ai .item-price {
-  margin-top: 2px;
-}
-
 .ai-reason {
-  margin-top: 4px;
+  margin-top: 2px;
+  margin-left: 32px;
   padding: 6px 8px;
   border-radius: 8px;
   background: rgba(13, 148, 136, 0.08);
@@ -435,13 +476,19 @@ function handleConfirm() {
 
 .check-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.33);
   border: 1px solid rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(8px);
+}
+
+.check-item-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .item-checkbox {
@@ -477,6 +524,10 @@ function handleConfirm() {
   color: #9CA3AF;
 }
 
+.check-item--unchecked .item-desc {
+  color: #D1D5DB;
+}
+
 .check-item--unchecked .item-price {
   color: #9CA3AF;
 }
@@ -485,14 +536,8 @@ function handleConfirm() {
   flex-shrink: 0;
 }
 
-.item-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .item-name {
+  flex: 1;
   font-size: 14px;
   font-weight: 600;
   color: #1A1A1A;
@@ -503,6 +548,7 @@ function handleConfirm() {
   font-size: 11px;
   color: #6B7280;
   font-family: "Noto Sans SC", sans-serif;
+  padding-left: 32px;
 }
 
 .item-price {
@@ -607,6 +653,84 @@ function handleConfirm() {
   box-shadow: 0 4px 16px rgba(13, 148, 136, 0.25);
 
   &:active { opacity: 0.85; }
+}
+
+/* 团检底部费用 */
+.group-bottom-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.group-bottom-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.group-bottom-label {
+  font-size: 11px;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.group-bottom-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: "DM Sans", sans-serif;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.group-bottom-value--ent {
+  color: #0D9488;
+}
+
+.group-bottom-value--emp {
+  color: #F59E0B;
+}
+
+.group-bottom-plus {
+  font-size: 18px;
+  font-weight: 600;
+  color: #9CA3AF;
+  font-family: "DM Sans", sans-serif;
+  margin-top: 10px;
+}
+
+.group-bottom-tags {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.group-bottom-tag {
+  font-size: 10px;
+  color: #6B7280;
+  background: rgba(107, 114, 128, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.group-bottom-tag--discount {
+  color: #0D9488;
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.group-bottom-tag--orig {
+  color: #9CA3AF;
+  text-decoration: line-through;
 }
 
 .confirm-text {
