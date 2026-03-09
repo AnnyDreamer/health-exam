@@ -1,14 +1,14 @@
 <template>
   <view v-if="visible" class="popup-mask">
-    <view class="popup-mask-bg" @tap="$emit('close')"></view>
+    <view class="popup-mask-bg" @tap="$emit('close')" @touchmove.prevent></view>
     <view class="popup-sheet" :class="{ 'popup-sheet--show': visible }">
       <!-- 拖拽条 + 关闭 -->
-      <view class="sheet-handle-row">
+      <view class="sheet-handle-row" @touchmove.prevent>
         <view class="sheet-handle"></view>
       </view>
 
       <!-- 滚动内容 -->
-      <scroll-view scroll-y class="sheet-scroll" :style="{ height: scrollHeight + 'px' }">
+      <scroll-view scroll-y class="sheet-scroll" :style="{ height: scrollHeight + 'px' }" @touchmove.stop>
         <view class="sheet-content" v-if="pkg">
           <!-- 套餐头部 -->
           <view class="pkg-head">
@@ -78,13 +78,16 @@
           <template v-else>
             <text class="items-title">检查项目 ({{ selectedCount }}/{{ pkg.items.length }}项)</text>
             <view class="items-list">
-              <view v-for="item in pkg.items" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+              <view v-for="item in pkg.items" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id), 'check-item--has-reason': !!item.aiReason }" @tap="toggleItem(item.id)">
                 <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
                   <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
                 </view>
                 <view class="item-info">
                   <text class="item-name">{{ item.name }}</text>
-                  <text class="item-desc">{{ item.description }}</text>
+                  <text v-if="item.description" class="item-desc">{{ item.description }}</text>
+                  <view v-if="item.aiReason" class="ai-reason">
+                    <text class="ai-reason-text">{{ item.aiReason }}</text>
+                  </view>
                 </view>
                 <text class="item-price">¥{{ item.price }}</text>
               </view>
@@ -103,7 +106,7 @@
       </scroll-view>
 
       <!-- 底部操作栏 -->
-      <view class="bottom-bar" v-if="pkg">
+      <view class="bottom-bar" v-if="pkg" @touchmove.prevent>
         <view class="price-section">
           <view class="price-label-area">
             <text class="price-label">已选 {{ selectedCount }} 项</text>
@@ -261,6 +264,7 @@ function handleConfirm() {
   flex: 1;
   height: 0;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .sheet-content {
@@ -387,6 +391,14 @@ function handleConfirm() {
   color: #6B7280;
   font-family: "Noto Sans SC", sans-serif;
   line-height: 1.5;
+}
+
+.check-item--has-reason {
+  align-items: flex-start;
+}
+
+.check-item--has-reason .item-price {
+  margin-top: 2px;
 }
 
 .check-item--ai {

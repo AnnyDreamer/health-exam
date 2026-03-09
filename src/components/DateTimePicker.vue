@@ -205,7 +205,7 @@ function handleConfirm() {
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border-radius: 28px 28px 0 0;
-  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 0 24px calc(20px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 18px;

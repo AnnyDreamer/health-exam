@@ -41,12 +41,17 @@ function savePackageToStore(packageCard: PackageCardData) {
     name: packageCard.name,
     description: `AI 为您量身定制的体检方案`,
     badge: packageCard.badge || 'AI定制',
-    items: packageCard.items.map((itemName, index) => ({
-      id: `item-ai-${index}`,
-      name: itemName,
-      description: '',
-      price: 0, // AI 生成的套餐暂无单项价格
-    })),
+    items: packageCard.items.map((item, index) => {
+      const itemName = typeof item === 'string' ? item : item.name;
+      const aiReason = typeof item === 'string' ? undefined : item.reason;
+      return {
+        id: `item-ai-${index}`,
+        name: itemName,
+        description: '',
+        price: 0,
+        aiReason,
+      };
+    }),
     totalPrice: packageCard.totalPrice,
     originalPrice: packageCard.originalPrice,
     notice: [
@@ -88,9 +93,20 @@ const makePackageWithDataScript: ScriptStep[] = [
       id: 'pkg-ai-001',
       name: '心脑血管专项套餐',
       badge: 'AI定制',
-      items: ['心脏彩超', '颈动脉彩超', '血脂全套', '生化全套', '一般检查', '心电图', '腹部B超'],
-      totalPrice: 1280,
-      originalPrice: 1580,
+      items: [
+        { name: '心脏彩超', reason: '血压偏高，需评估心脏结构和功能' },
+        { name: '颈动脉彩超', reason: '血压偏高，筛查颈动脉斑块和狭窄' },
+        { name: '血脂全套', reason: '总胆固醇、甘油三酯、低密度脂蛋白均偏高' },
+        { name: '同型半胱氨酸', reason: '高同型半胱氨酸是心脑血管疾病独立风险因素' },
+        { name: '甲状腺功能全套', reason: 'TSH偏高，需全面评估甲状腺功能' },
+        { name: '甲状腺彩超', reason: 'TSH异常，排查甲状腺结节等器质性病变' },
+        { name: '空腹血糖+胰岛素释放试验', reason: 'BMI接近超重，筛查胰岛素抵抗' },
+        { name: '肝脂肪定量超声（FibroScan可选）', reason: '甘油三酯升高伴BMI偏高，精准评估非酒精性脂肪肝' },
+        { name: '生化全套', reason: '综合评估肝肾功能及代谢指标' },
+        { name: '一般检查', reason: '基础体格检查，监测血压和BMI变化' },
+      ],
+      totalPrice: 1680,
+      originalPrice: 1980,
     },
   },
 ];
@@ -151,7 +167,16 @@ const makePackageGuidedScript: ScriptStep[] = [
       id: 'pkg-ai-guided-001',
       name: '个性化健康筛查套餐',
       badge: 'AI定制',
-      items: ['一般检查', '血常规', '尿常规', '生化全套', '心电图', '腹部B超', '甲状腺彩超', '胸部CT'],
+      items: [
+        { name: '一般检查', reason: '基础体格检查，评估身高体重血压等基本指标' },
+        { name: '血常规', reason: '筛查贫血、感染、血液系统疾病' },
+        { name: '尿常规', reason: '评估肾脏功能和泌尿系统健康' },
+        { name: '生化全套', reason: '全面评估肝肾功能、血糖血脂等代谢指标' },
+        { name: '心电图', reason: '筛查心律失常和心肌缺血' },
+        { name: '腹部B超', reason: '检查肝胆脾胰双肾是否有器质性病变' },
+        { name: '甲状腺彩超', reason: '筛查甲状腺结节等常见甲状腺疾病' },
+        { name: '胸部CT', reason: '低剂量螺旋CT筛查肺部结节和早期肺癌' },
+      ],
       totalPrice: 1380,
       originalPrice: 1780,
     },

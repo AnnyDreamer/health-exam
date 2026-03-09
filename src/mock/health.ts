@@ -63,7 +63,7 @@ const chenYuxuanProfile: HealthProfile = {
       id: 'visit-001',
       date: '2025-11-20',
       department: '内分泌科',
-      hospital: '江苏省人民医院',
+      hospital: '福鑫互联网医院',
       diagnosis: '亚临床甲状腺功能减退',
       doctor: '张明华',
       summary: 'TSH 5.8 mIU/L，FT3、FT4正常范围。甲状腺彩超未见明显结节。目前无需药物干预，建议3个月后复查甲状腺功能全套，观察TSH变化趋势。注意保持规律作息，避免过度疲劳。',
@@ -72,7 +72,7 @@ const chenYuxuanProfile: HealthProfile = {
       id: 'visit-002',
       date: '2025-09-05',
       department: '心内科',
-      hospital: '南京鼓楼医院',
+      hospital: '福鑫互联网医院',
       diagnosis: '高脂血症',
       doctor: '李文清',
       summary: '总胆固醇6.1 mmol/L，低密度脂蛋白4.1 mmol/L，甘油三酯2.3 mmol/L，均高于正常范围。心电图正常，颈动脉彩超未见斑块。处方阿托伐他汀钙片10mg，每晚一次，配合饮食控制，6周后复查血脂。',
@@ -81,7 +81,7 @@ const chenYuxuanProfile: HealthProfile = {
       id: 'visit-003',
       date: '2025-03-12',
       department: '全科',
-      hospital: '南京市第一医院',
+      hospital: '福鑫互联网医院',
       diagnosis: '年度体检异常指标随访',
       doctor: '王丽萍',
       summary: '2024年度体检发现血压128/82 mmHg，处于正常偏高范围。家族无高血压病史。建议低盐低脂饮食，每日钠摄入控制在5g以内，增加有氧运动，每周至少150分钟中等强度运动，2周后复测血压。',
@@ -90,7 +90,7 @@ const chenYuxuanProfile: HealthProfile = {
       id: 'visit-004',
       date: '2024-11-15',
       department: '体检中心',
-      hospital: '江苏省人民医院健康管理中心',
+      hospital: '福鑫互联网医院',
       diagnosis: '年度体检',
       doctor: '赵永安',
       summary: '年度健康体检，发现总胆固醇偏高(5.8 mmol/L)、BMI 24.8接近超重标准、维生素D偏低(18.2 ng/mL)。其余指标正常。建议控制体重、调整饮食结构、适当补充维生素D。',
@@ -100,7 +100,7 @@ const chenYuxuanProfile: HealthProfile = {
     {
       id: 'exam-001',
       date: '2025-11-20',
-      institution: '江苏省人民医院健康管理中心',
+      institution: '福鑫互联网医院',
       type: '年度体检',
       abnormalCount: 6,
       indicators: [
@@ -125,7 +125,7 @@ const chenYuxuanProfile: HealthProfile = {
     {
       id: 'exam-002',
       date: '2024-11-15',
-      institution: '江苏省人民医院健康管理中心',
+      institution: '福鑫互联网医院',
       type: '年度体检',
       abnormalCount: 3,
       indicators: [
@@ -201,7 +201,7 @@ const wangSiqiProfile: HealthProfile = {
       id: 'visit-w001',
       date: '2025-10-22',
       department: '消化内科',
-      hospital: '北京协和医院',
+      hospital: '福鑫互联网医院',
       diagnosis: '幽门螺杆菌感染',
       doctor: '陈志强',
       summary: 'C14呼气试验阳性，DPM值680。胃镜检查显示浅表性胃炎。予以四联疗法根除治疗：阿莫西林1g+克拉霉素0.5g+枸橼酸铋钾220mg+奥美拉唑20mg，bid，疗程14天。治疗结束后停药1个月复查C14呼气试验。',
@@ -210,7 +210,7 @@ const wangSiqiProfile: HealthProfile = {
       id: 'visit-w002',
       date: '2025-10-08',
       department: '骨科',
-      hospital: '北京大学第三医院',
+      hospital: '福鑫互联网医院',
       diagnosis: '颈椎病(颈型)',
       doctor: '刘建伟',
       summary: '颈椎X线示颈椎生理曲度变直，C4-C5椎间隙稍窄。长期伏案工作相关。建议调整工作姿势，每小时活动颈部5分钟，加强颈部肌肉锻炼。予以颈椎康复操指导，必要时理疗。',
@@ -219,7 +219,7 @@ const wangSiqiProfile: HealthProfile = {
       id: 'visit-w003',
       date: '2025-06-18',
       department: '全科',
-      hospital: '北京市朝阳区社区卫生服务中心',
+      hospital: '福鑫互联网医院',
       diagnosis: '维生素D缺乏',
       doctor: '孙晓红',
       summary: '维生素D 18.5 ng/mL，低于正常范围(30-100)。无骨质疏松症状，骨密度检查正常。建议每日补充维生素D3 2000IU，增加户外活动时间，3个月后复查。',
@@ -229,7 +229,7 @@ const wangSiqiProfile: HealthProfile = {
     {
       id: 'exam-w001',
       date: '2025-10-08',
-      institution: '北京慈铭体检中心(朝阳分院)',
+      institution: '福鑫互联网医院',
       type: '企业年度体检',
       abnormalCount: 3,
       indicators: [
@@ -252,7 +252,7 @@ const wangSiqiProfile: HealthProfile = {
     {
       id: 'exam-w002',
       date: '2024-09-20',
-      institution: '北京慈铭体检中心(朝阳分院)',
+      institution: '福鑫互联网医院',
       type: '企业年度体检',
       abnormalCount: 1,
       indicators: [

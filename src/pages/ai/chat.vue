@@ -220,7 +220,7 @@
                 <PackageCard
                   :name="msg.packageCard.name"
                   :badge="msg.packageCard.badge"
-                  :description="`含${msg.packageCard.items.slice(0,3).join('、')}等 ${msg.packageCard.items.length} 项检查，\n重点覆盖你的异常指标`"
+                  :description="`含${msg.packageCard.items.slice(0,3).map(i => typeof i === 'string' ? i : i.name).join('、')}等 ${msg.packageCard.items.length} 项检查，\n重点覆盖你的异常指标`"
                   :items="msg.packageCard.items"
                   :total-price="msg.packageCard.totalPrice"
                   :original-price="msg.packageCard.originalPrice"
@@ -568,6 +568,15 @@ async function enterChat(key: string) {
 }
 
 async function handleOption(opt: ChatOption) {
+  // 导航类选项直接跳转，不发送聊天消息
+  if (opt.value === 'view-appointment') {
+    uni.navigateTo({ url: '/pages/appointment/index' });
+    return;
+  }
+  if (opt.value === 'view-report') {
+    uni.navigateTo({ url: '/pages/report/detail?id=report-001' });
+    return;
+  }
   await chatStore.sendUserMessage(opt.label, opt.value);
   scrollToBottom();
 }

@@ -18,11 +18,16 @@ export interface HealthCardData {
   }>;
 }
 
+export interface PackageItemWithReason {
+  name: string;
+  reason?: string;
+}
+
 export interface PackageCardData {
   id: string;
   name: string;
   badge?: string;
-  items: string[];
+  items: (string | PackageItemWithReason)[];
   totalPrice: number;
   originalPrice?: number;
 }
@@ -99,7 +104,7 @@ export interface QwenResponse {
 export interface AIPackageRecommendation {
   name: string;
   badge: string;
-  items: string[];
+  items: (string | PackageItemWithReason)[];
   totalPrice: number;
   originalPrice?: number;
   reason: string;

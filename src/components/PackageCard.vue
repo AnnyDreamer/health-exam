@@ -31,7 +31,7 @@ defineProps<{
   name: string;
   badge?: string;
   description?: string;
-  items?: string[];
+  items?: (string | { name: string; reason?: string })[];
   totalPrice: number;
   originalPrice?: number;
 }>();
