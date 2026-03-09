@@ -75,7 +75,7 @@ export function setupAppointmentMock() {
       date: data.date,
       time: data.time,
       location: '健康体检中心 3楼 VIP区',
-      status: 'pending',
+      status: 'confirmed',
       items: pkgInfo.items,
       totalPrice: pkgInfo.price,
       createdAt: new Date().toISOString().split('T')[0],

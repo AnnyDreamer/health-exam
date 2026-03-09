@@ -334,6 +334,16 @@
       @book="handlePopupBook"
     />
 
+    <PaymentPopup
+      :visible="showPayment"
+      :amount="groupPaymentAmount"
+      :total-price="groupTotalPrice"
+      :enterprise-coverage="groupEnterpriseCoverage"
+      :discount="groupDiscount"
+      @close="showPayment = false"
+      @confirm="handlePaymentConfirm"
+    />
+
     <!-- 加载数据弹窗 -->
     <view v-if="pagePhase === 'loading'" class="loading-popup-mask">
       <view class="loading-popup-bg"></view>
@@ -462,6 +472,7 @@ import PackageCard from '@/components/PackageCard.vue';
 import FollowUpCard from '@/components/FollowUpCard.vue';
 import PendingPopup from '@/components/PendingPopup.vue';
 import DateTimePicker from '@/components/DateTimePicker.vue';
+import PaymentPopup from '@/components/PaymentPopup.vue';
 import PackageDetailPopup from '@/components/PackageDetailPopup.vue';
 import HealthRecordView from '@/components/HealthRecordView.vue';
 import ProfileView from '@/components/ProfileView.vue';

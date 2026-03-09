@@ -196,39 +196,91 @@ export async function qwenVisionStream(
   });
 }
 
+const QWEN_FILES_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/files';
+
+/**
+ * 上传文件到千问文件接口，获取 file_id
+ *
+ * @param base64Data - 文件的 base64 编码（含 data:xxx;base64,... 前缀）
+ * @param fileName   - 文件名
+ * @returns file_id
+ */
+async function uploadFileToQwen(base64Data: string, fileName: string): Promise<string> {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('VITE_QWEN_API_KEY 未配置');
+
+  // base64 转 Blob
+  const parts = base64Data.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+  const byteString = atob(parts[1]);
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([ab], { type: mime });
+
+  const formData = new FormData();
+  formData.append('file', blob, fileName);
+  formData.append('purpose', 'file-extract');
+
+  const response = await fetch(QWEN_FILES_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`文件上传失败 (${response.status}): ${errorText}`);
+  }
+
+  const result = await response.json();
+  return result.id; // file-xxx
+}
+
 /**
  * 多模态请求：发送 PDF 文件到千问 VL 模型（流式）
  *
- * 千问 VL 模型支持直接传入 PDF 文件进行文档理解
+ * 流程：先通过千问文件接口上传 PDF，获取 file_id，再在对话中引用
  *
  * @param fileBase64 - PDF 文件的 base64 编码（含 data:application/pdf;base64,... 前缀）
  * @param prompt     - 文字提示
  * @param onChunk    - 流式回调
+ * @param fileName   - 文件名（可选）
  * @returns 完整的 AI 回复文本
  */
 export async function qwenDocStream(
   fileBase64: string,
   prompt: string,
   onChunk: (chunk: string) => void,
+  fileName?: string,
 ): Promise<string> {
+  // 1. 上传文件获取 file_id
+  const fileId = await uploadFileToQwen(fileBase64, fileName || 'report.pdf');
+
+  // 2. 使用 fileid:// 协议引用文件
   const messages: QwenMessage[] = [
     {
-      role: 'user',
+      role: 'system',
       content: [
         {
           type: 'file',
-          file_url: { url: fileBase64 },
-        },
-        {
-          type: 'text',
-          text: prompt,
+          file_url: { url: `fileid://${fileId}` },
         },
       ],
+    },
+    {
+      role: 'user',
+      content: prompt,
     },
   ];
 
   return qwenChatStream(messages, onChunk, {
-    model: getVLModel(),
+    model: 'qwen-long',
     maxTokens: 4096,
   });
 }

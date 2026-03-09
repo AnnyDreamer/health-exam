@@ -259,11 +259,12 @@ export async function interpretPdfReport(
   pdfBase64: string,
   onChunk: (chunk: string) => void,
   extraPrompt?: string,
+  fileName?: string,
 ): Promise<string> {
   const prompt =
     extraPrompt || '请帮我解读这份体检报告，分析各项指标是否正常，并给出健康建议。';
 
-  return qwenDocStream(pdfBase64, `${PDF_REPORT_SYSTEM_PROMPT}\n\n${prompt}`, onChunk);
+  return qwenDocStream(pdfBase64, `${PDF_REPORT_SYSTEM_PROMPT}\n\n${prompt}`, onChunk, fileName);
 }
 
 /**

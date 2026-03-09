@@ -189,7 +189,7 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-.s-pending { background: rgba(245, 158, 11, 0.125); }
+.s-pending { background: rgba(34, 197, 94, 0.125); }
 .s-confirmed { background: rgba(34, 197, 94, 0.125); }
 .s-completed { background: rgba(99, 102, 241, 0.125); }
 .s-cancelled { background: rgba(239, 68, 68, 0.125); }
@@ -200,7 +200,7 @@ onMounted(() => {
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.s-pending .status-text { color: #D97706; }
+.s-pending .status-text { color: #059669; }
 .s-confirmed .status-text { color: #059669; }
 .s-completed .status-text { color: #4F46E5; }
 .s-cancelled .status-text { color: #EF4444; }

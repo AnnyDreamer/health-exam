@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { Clock, CircleCheckBig, Award, XCircle } from 'lucide-vue-next';
+import { CircleCheckBig, Award, XCircle } from 'lucide-vue-next';
 import { useAppointmentStore } from '@/stores/appointment';
 
 const store = useAppointmentStore();
@@ -72,17 +72,17 @@ const aptId = ref('');
 const apt = computed(() => store.currentAppointment);
 
 const statusIconComp = computed(() => {
-  const map: Record<string, any> = { pending: Clock, confirmed: CircleCheckBig, completed: Award, cancelled: XCircle };
-  return map[apt.value?.status || ''] || Clock;
+  const map: Record<string, any> = { pending: CircleCheckBig, confirmed: CircleCheckBig, completed: Award, cancelled: XCircle };
+  return map[apt.value?.status || ''] || CircleCheckBig;
 });
 
 const statusColor = computed(() => {
-  const map: Record<string, string> = { pending: '#D97706', confirmed: '#059669', completed: '#4F46E5', cancelled: '#EF4444' };
+  const map: Record<string, string> = { pending: '#059669', confirmed: '#059669', completed: '#4F46E5', cancelled: '#EF4444' };
   return map[apt.value?.status || ''] || '#6B7280';
 });
 
 const statusLabel = computed(() => {
-  const map: Record<string, string> = { pending: '待确认', confirmed: '已确认', completed: '已完成', cancelled: '已取消' };
+  const map: Record<string, string> = { pending: '已预约', confirmed: '已预约', completed: '已完成', cancelled: '已取消' };
   return map[apt.value?.status || ''] || '';
 });
 
@@ -130,7 +130,7 @@ onMounted(() => {
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 
-  &.sc-pending { background: rgba(254, 243, 199, 0.5); }
+  &.sc-pending { background: rgba(209, 250, 229, 0.5); }
   &.sc-confirmed { background: rgba(209, 250, 229, 0.5); }
   &.sc-completed { background: rgba(224, 231, 255, 0.5); }
   &.sc-cancelled { background: rgba(254, 226, 226, 0.5); }
