@@ -1,7 +1,7 @@
 <template>
   <view class="health-card">
     <!-- 评分行：圆环左 + 信息右，点击跳转报告 -->
-    <view class="score-row" @tap="goReport">
+    <view class="score-row" @tap="$emit('viewReport')">
       <view class="score-ring-wrapper">
         <svg class="score-ring-svg" viewBox="0 0 80 80" width="80" height="80">
           <circle cx="40" cy="40" r="34" fill="none" :stroke="ringTrackColor" stroke-width="6" />
@@ -30,7 +30,7 @@
     </view>
 
     <!-- 指标标签：异常最多4个 + 溢出汇总 + 正常汇总，点击跳转报告 -->
-    <view class="tag-row" @tap="goReport">
+    <view class="tag-row" @tap="$emit('viewReport')">
       <view
         v-for="(ind, i) in displayedAbnormal"
         :key="'w-' + i"
@@ -87,7 +87,7 @@ const props = defineProps<{
   lastDate: string;
 }>();
 
-defineEmits(['viewRisk', 'makePackage']);
+defineEmits(['viewRisk', 'makePackage', 'viewReport']);
 
 const MAX_ABNORMAL_DISPLAY = 4;
 
@@ -108,10 +108,6 @@ const displayedAbnormal = computed(() =>
 const hiddenAbnormalCount = computed(() =>
   Math.max(0, abnormalIndicators.value.length - MAX_ABNORMAL_DISPLAY),
 );
-
-function goReport() {
-  uni.navigateTo({ url: '/pages/report/detail' });
-}
 
 // SVG 圆环 r=34
 const circumference = 2 * Math.PI * 34;
@@ -288,9 +284,13 @@ const ringTrackColor = computed(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
 
-  &:active { opacity: 0.7; }
+  &:active { background: rgba(255, 255, 255, 0.95); }
 }
 
 .action-icon {

@@ -15,10 +15,10 @@
     <view class="price-row">
       <text class="price-text">¥ {{ totalPrice.toLocaleString() }}</text>
       <view class="btn-row">
-        <view class="adj-btn" @tap.stop="$emit('customize')">
+        <view class="adj-btn" @tap="$emit('customize')">
           <text class="adj-text">查看详情</text>
         </view>
-        <view class="cfm-btn" @tap.stop="$emit('confirm')">
+        <view class="cfm-btn" @tap="$emit('confirm')">
           <text class="cfm-text">立即预约</text>
         </view>
       </view>

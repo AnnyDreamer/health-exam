@@ -1,24 +1,20 @@
 <template>
   <view v-if="visible" class="menu-overlay" @tap="$emit('close')">
     <view class="menu-dropdown" @tap.stop>
-      <view class="menu-item" @tap="navigate('/pages/user/profile')">
-        <User :size="18" color="#6B7280" />
-        <text class="menu-label">个人中心</text>
-      </view>
       <view class="menu-item" @tap="navigate('/pages/appointment/index')">
         <CalendarDays :size="18" color="#6B7280" />
         <text class="menu-label">我的预约</text>
       </view>
-      <view class="menu-item" @tap="navigate('/pages/report/detail?id=report-001')">
-        <FileBarChart :size="18" color="#6B7280" />
-        <text class="menu-label">健康档案</text>
+      <view class="menu-item" @tap="navigate('/pages/package/list')">
+        <ClipboardList :size="18" color="#6B7280" />
+        <text class="menu-label">体检套餐</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { User, CalendarDays, FileBarChart } from 'lucide-vue-next';
+import { CalendarDays, ClipboardList } from 'lucide-vue-next';
 
 defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close']);
@@ -61,18 +57,8 @@ function navigate(url: string) {
   }
 }
 
-.menu-icon-text {
-  font-size: 16px;
-}
-
 .menu-label {
   font-size: 15px;
   color: #374151;
-}
-
-.menu-divider {
-  height: 1px;
-  background: #F3F4F6;
-  margin: 4px 16px;
 }
 </style>

@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { UserInfo } from '@/types/user';
-import { getToken, setToken, removeToken, setUser, getUser, clearAll, getGroupPackageConfirmed, setGroupPackageConfirmed } from '@/utils/storage';
+import { getToken, setToken, removeToken, setUser, getUser, clearAll, getGroupPackageConfirmed, setGroupPackageConfirmed, getDataAuth, setDataAuth, removeDataAuth } from '@/utils/storage';
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(getToken());
   const userInfo = ref<UserInfo | null>(getUser<UserInfo>());
   const groupPackageConfirmed = ref(getGroupPackageConfirmed());
+  const dataAuthorized = ref(false);
 
   const isLoggedIn = computed(() => !!token.value);
   const userName = computed(() => userInfo.value?.name || '');
@@ -20,15 +21,39 @@ export const useUserStore = defineStore('user', () => {
     setUser(data.user);
   }
 
+  function checkDataAuth(): boolean {
+    const userId = userInfo.value?.id || userInfo.value?.idCard || '';
+    if (!userId) return false;
+    const record = getDataAuth(userId);
+    if (record && record.authorized) {
+      dataAuthorized.value = true;
+      return true;
+    }
+    return false;
+  }
+
+  function setDataAuthResult(authorized: boolean) {
+    const userId = userInfo.value?.id || userInfo.value?.idCard || '';
+    if (!userId) return;
+    dataAuthorized.value = authorized;
+    setDataAuth(userId, { authorized, timestamp: Date.now() });
+  }
+
   function confirmGroupPackage() {
     groupPackageConfirmed.value = true;
     setGroupPackageConfirmed(true);
   }
 
   function logout() {
+    // 清除授权数据（需要在清除 userInfo 之前拿到 userId）
+    const userId = userInfo.value?.id || userInfo.value?.idCard || '';
+    if (userId) {
+      removeDataAuth(userId);
+    }
     token.value = '';
     userInfo.value = null;
     groupPackageConfirmed.value = false;
+    dataAuthorized.value = false;
     clearAll();
   }
 
@@ -39,5 +64,5 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { token, userInfo, isLoggedIn, userName, hasGroupPackage, groupPackageConfirmed, hasPendingPackage, login, logout, updateUser, confirmGroupPackage };
+  return { token, userInfo, isLoggedIn, userName, hasGroupPackage, groupPackageConfirmed, hasPendingPackage, dataAuthorized, login, logout, updateUser, confirmGroupPackage, checkDataAuth, setDataAuthResult };
 });

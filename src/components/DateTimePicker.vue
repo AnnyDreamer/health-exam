@@ -1,5 +1,6 @@
 <template>
-  <view v-if="visible" class="picker-overlay" @tap.self="$emit('close')">
+  <view v-if="visible" class="picker-overlay">
+    <view class="picker-overlay-bg" @tap="$emit('close')"></view>
     <view class="picker-sheet">
       <!-- 顶部把手 -->
       <view class="sheet-handle">
@@ -8,8 +9,15 @@
 
       <!-- 标题区 -->
       <view class="sheet-header">
-        <text class="sheet-title">选择体检时间</text>
-        <text class="sheet-subtitle">请选择您方便的日期和时间段</text>
+        <view class="sheet-title-row">
+          <view class="sheet-icon-wrap">
+            <CalendarClock :size="20" color="#0D9488" />
+          </view>
+          <view class="sheet-title-area">
+            <text class="sheet-title">选择体检时间</text>
+            <text class="sheet-subtitle">请选择您方便的日期和时间段</text>
+          </view>
+        </view>
       </view>
 
       <!-- 日期选择 -->
@@ -36,7 +44,10 @@
       <view class="section">
         <text class="section-label">选择时间段</text>
         <view class="time-group">
-          <text class="time-period">上午</text>
+          <view class="time-period-row">
+            <Sunrise :size="14" color="#F59E0B" />
+            <text class="time-period">上午</text>
+          </view>
           <view class="time-slots">
             <view
               v-for="t in morningSlots"
@@ -50,7 +61,10 @@
           </view>
         </view>
         <view class="time-group">
-          <text class="time-period">下午</text>
+          <view class="time-period-row">
+            <Sunset :size="14" color="#F97316" />
+            <text class="time-period">下午</text>
+          </view>
           <view class="time-slots">
             <view
               v-for="t in afternoonSlots"
@@ -68,6 +82,7 @@
       <!-- 已选摘要 + 确认按钮 -->
       <view class="sheet-footer">
         <view v-if="selectedDate && selectedTime" class="selection-summary">
+          <CalendarCheck :size="16" color="#0D9488" />
           <text class="summary-text">{{ summaryText }}</text>
         </view>
         <view
@@ -75,6 +90,7 @@
           :class="{ 'confirm-btn-disabled': !canConfirm }"
           @tap="handleConfirm"
         >
+          <CalendarCheck v-if="canConfirm" :size="18" color="#fff" />
           <text class="confirm-btn-text">确认预约时间</text>
         </view>
       </view>
@@ -84,6 +100,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { CalendarClock, CalendarCheck, Sunrise, Sunset } from 'lucide-vue-next';
 
 defineProps<{
   visible: boolean;
@@ -161,58 +178,92 @@ function handleConfirm() {
 .picker-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
   z-index: 500;
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 
+.picker-overlay-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  animation: overlayFadeIn 0.2s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .picker-sheet {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 500px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 24px 24px 0 0;
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.95) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 28px 28px 0 0;
   padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.12);
-  animation: sheetUp 0.3s ease-out;
+  gap: 18px;
+  box-shadow: 0 -8px 40px rgba(13, 148, 136, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  animation: sheetUp 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 @keyframes sheetUp {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 .sheet-handle {
   display: flex;
   justify-content: center;
-  padding: 12px 0 4px;
+  padding: 12px 0 2px;
 }
 
 .handle-bar {
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: #D1D5DB;
+  background: rgba(13, 148, 136, 0.2);
 }
 
+/* ---- 标题区 ---- */
 .sheet-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+}
+
+.sheet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sheet-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sheet-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sheet-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #1A1A1A;
   font-family: "Noto Sans SC", sans-serif;
@@ -220,36 +271,35 @@ function handleConfirm() {
 
 .sheet-subtitle {
   font-size: 13px;
-  color: #6B7280;
+  color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
 }
 
+/* ---- Section ---- */
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .section-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   font-family: "Noto Sans SC", sans-serif;
 }
 
-/* 日期横向滚动 */
+/* ---- 日期横向滚动 ---- */
 .date-scroll {
   white-space: nowrap;
   width: 100%;
 
-  ::-webkit-scrollbar {
-    display: none;
-  }
+  ::-webkit-scrollbar { display: none; }
 }
 
 .date-list {
   display: inline-flex;
-  gap: 10px;
+  gap: 8px;
   padding: 2px 0;
 }
 
@@ -258,29 +308,29 @@ function handleConfirm() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: 68px;
-  height: 84px;
+  gap: 2px;
+  width: 64px;
+  height: 80px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1.5px solid rgba(209, 213, 219, 0.4);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
-  &:active {
-    transform: scale(0.96);
-  }
+  &:active { transform: scale(0.95); }
 }
 
 .date-card-active {
-  background: #0D9488;
-  border-color: #0D9488;
-  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3);
+  background: linear-gradient(135deg, #0D9488, #14B8A6);
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.3);
 }
 
 .date-weekday {
-  font-size: 12px;
-  color: #6B7280;
+  font-size: 11px;
+  color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
   font-weight: 500;
 }
@@ -290,10 +340,11 @@ function handleConfirm() {
   font-weight: 700;
   color: #1A1A1A;
   font-family: "DM Sans", sans-serif;
+  line-height: 1.1;
 }
 
 .date-month {
-  font-size: 11px;
+  font-size: 10px;
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
 }
@@ -302,11 +353,17 @@ function handleConfirm() {
   color: #fff !important;
 }
 
-/* 时间段 */
+/* ---- 时间段 ---- */
 .time-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.time-period-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .time-period {
@@ -318,52 +375,57 @@ function handleConfirm() {
 
 .time-slots {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .time-slot {
   flex: 1;
-  min-width: 90px;
+  min-width: 88px;
   height: 42px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1.5px solid rgba(209, 213, 219, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
-  &:active {
-    transform: scale(0.96);
-  }
+  &:active { transform: scale(0.96); }
 }
 
 .time-slot-active {
-  background: #0D9488;
-  border-color: #0D9488;
-  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3);
+  background: linear-gradient(135deg, #0D9488, #14B8A6);
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.3);
 }
 
 .time-text {
   font-size: 13px;
   font-weight: 600;
   color: #374151;
-  font-family: "Noto Sans SC", sans-serif;
+  font-family: "DM Sans", sans-serif;
 }
 
-/* 底部 */
+/* ---- 底部 ---- */
 .sheet-footer {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 10px;
+  padding-top: 2px;
 }
 
 .selection-summary {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(13, 148, 136, 0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(13, 148, 136, 0.1);
 }
 
 .summary-text {
@@ -377,20 +439,19 @@ function handleConfirm() {
   width: 100%;
   height: 50px;
   border-radius: 16px;
-  background: linear-gradient(180deg, #0D9488, #0B7C72);
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3);
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.25);
   transition: opacity 0.2s ease;
 
-  &:active {
-    opacity: 0.85;
-  }
+  &:active { opacity: 0.85; }
 }
 
 .confirm-btn-disabled {
-  background: #D1D5DB;
+  background: linear-gradient(90deg, #D1D5DB, #E5E7EB);
   box-shadow: none;
 }
 

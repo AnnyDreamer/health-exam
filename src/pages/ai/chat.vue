@@ -1,205 +1,279 @@
 <template>
   <view class="chat-page">
-    <TopBar :show-new-chat="showChat" @menu="showMenu = true" @new-chat="handleNewChat" />
-    <MoreMenu :visible="showMenu" @close="showMenu = false" />
+    <TopBar
+      :show-new-chat="showChat && currentTab === 'ai'"
+      @new-chat="handleNewChat"
+    />
 
-    <!-- 统一滚动区域：卡片 + 对话消息 -->
-    <scroll-view
-      scroll-y
-      :scroll-into-view="scrollToId"
-      :scroll-top="forceScrollTop"
-      class="page-scroll"
-      @scroll="onPageScroll"
-    >
-      <view id="page-top"></view>
-
-      <!-- Hero -->
-      <view class="hero">
-        <view class="hello-row">
-          <text class="hello-text">Hello</text>
-          <Sparkles :size="24" class="hello-sparkle" />
-        </view>
-        <text v-if="hasData" class="greet-text">你好，{{ userName }}</text>
-        <text v-else class="greet-text">让我帮你了解健康</text>
-      </view>
-
-      <!-- 团检套餐通知横幅 -->
-      <view v-if="showGroupBanner" class="group-banner" @tap="goGroupPackageDetail">
-        <view class="group-banner-icon">
-          <Building2 :size="18" color="#D97706" />
-        </view>
-        <text class="group-banner-text">您的企业已安排体检套餐，请确认</text>
-        <view class="group-banner-action">
-          <text class="group-banner-btn">查看</text>
-          <ChevronRight :size="14" color="#D97706" />
-        </view>
-      </view>
-
-      <!-- 有健康数据 -->
-      <view v-if="hasData" class="content-area">
-        <HealthCard
-          :score="healthStore.score?.score || 0"
-          :max-score="healthStore.score?.maxScore || 100"
-          :status="healthStore.score?.status || 'normal'"
-          :indicators="healthStore.indicators"
-          :last-date="healthStore.healthData?.lastCheckDate || ''"
-          @view-risk="enterChat('view-risk')"
-          @make-package="enterChat('make-package')"
-        />
-      </view>
-
-      <!-- 无健康数据 -->
-      <view v-else class="content-area">
-        <view class="service-card">
-          <view class="service-title-row">
-            <view class="service-dot"></view>
-            <text class="service-title">我可以帮你</text>
+    <!-- 页面主体（始终渲染） -->
+    <template v-if="true">
+      <!-- Hero 区域 - 所有 tab 共享 -->
+      <view class="hero-fixed">
+        <view class="hero">
+          <view class="hello-row hero-anim hero-anim-1">
+            <text class="hello-text">Hello</text>
+            <Sparkles :size="24" class="hello-sparkle sparkle-anim" />
           </view>
-          <text class="service-hint">目前没有获取到您的健康数据，请选择需要的服务：</text>
-          <view class="service-items">
-            <view class="service-item" @tap="enterChat('report-interpret')">
-              <view class="si-icon" style="background: #0D9488;">
-                <FileSearch :size="20" color="#fff" />
-              </view>
-              <view class="si-text">
-                <text class="si-title">体检报告解读</text>
-                <text class="si-desc">上传报告，AI 为您逐项分析</text>
-              </view>
-              <ChevronRight :size="18" color="#9CA3AF" />
-            </view>
-            <view class="service-item" @tap="enterChat('make-package')">
-              <view class="si-icon" style="background: #F59E0B;">
-                <PackageCheck :size="20" color="#fff" />
-              </view>
-              <view class="si-text">
-                <text class="si-title">制定体检套餐</text>
-                <text class="si-desc">根据年龄和需求推荐体检项目</text>
-              </view>
-              <ChevronRight :size="18" color="#9CA3AF" />
-            </view>
-            <view class="service-item" @tap="enterChat('exam-process')">
-              <view class="si-icon" style="background: #3B82F6;">
-                <Route :size="20" color="#fff" />
-              </view>
-              <view class="si-text">
-                <text class="si-title">了解体检流程</text>
-                <text class="si-desc">体检前中后注意事项和流程</text>
-              </view>
-              <ChevronRight :size="18" color="#9CA3AF" />
-            </view>
-            <view class="service-item" @tap="enterChat('consult')">
-              <view class="si-icon" style="background: #8B5CF6;">
-                <CalendarCheck :size="20" color="#fff" />
-              </view>
-              <view class="si-text">
-                <text class="si-title">预约咨询</text>
-                <text class="si-desc">在线预约体检或咨询医生</text>
-              </view>
-              <ChevronRight :size="18" color="#9CA3AF" />
-            </view>
-          </view>
+          <text v-if="hasData || userStore.dataAuthorized" class="greet-text hero-anim hero-anim-2">你好，{{ userName }}</text>
+          <text v-else class="greet-text hero-anim hero-anim-2">让我帮你了解健康</text>
         </view>
-      </view>
 
-      <!-- 历史会话（仅非对话时显示） -->
-      <view v-if="!showChat && sessionList.length > 0" class="history-section">
-        <view class="history-header" @tap="showHistory = !showHistory">
-          <view class="history-title-row">
-            <History :size="14" color="#9CA3AF" />
-            <text class="history-title">历史会话</text>
-            <text class="history-count">{{ sessionList.length }}条</text>
-          </view>
-          <ChevronDown v-if="!showHistory" :size="16" color="#9CA3AF" />
-          <ChevronUp v-if="showHistory" :size="16" color="#9CA3AF" />
-        </view>
-        <view v-if="showHistory" class="history-list">
+        <!-- Tab 切换 -->
+        <view class="tab-group">
           <view
-            v-for="s in sessionList"
-            :key="s.id"
-            class="history-item"
-            @tap="viewSession(s.id)"
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="tab-pill"
+            :class="{ 'tab-pill--active': currentTab === tab.key }"
+            @tap="handleTabChange(tab.key)"
           >
-            <view class="history-item-content">
-              <text class="history-preview">{{ s.preview }}</text>
-              <text class="history-meta">{{ formatTime(s.timestamp) }} · {{ s.messageCount }}条消息</text>
+            <component :is="tab.icon" :size="14" :color="currentTab === tab.key ? '#fff' : '#6B7280'" />
+            <text class="tab-pill-text" :class="{ 'tab-pill-text--active': currentTab === tab.key }">{{ tab.label }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- AI 助手 Tab -->
+      <scroll-view
+        v-show="currentTab === 'ai'"
+        scroll-y
+        :scroll-into-view="scrollToId"
+        :scroll-top="forceScrollTop"
+        class="page-scroll"
+        @scroll="onPageScroll"
+      >
+        <view id="page-top"></view>
+
+        <!-- 等待授权中卡片 -->
+        <view v-if="showAuthPopup || pagePhase === 'loading'" class="status-card">
+          <view class="status-card-icon-wrap">
+            <view class="status-card-pulse-ring"></view>
+            <ShieldCheck :size="24" color="#0D9488" class="status-card-icon" />
+          </view>
+          <view class="status-card-text">
+            <text class="status-card-title">{{ pagePhase === 'loading' ? '正在获取健康数据' : '等待数据授权' }}</text>
+            <text class="status-card-desc">{{ pagePhase === 'loading' ? '正在从医院系统获取您的健康信息...' : '请在弹窗中完成数据授权以获取健康信息' }}</text>
+          </view>
+        </view>
+
+        <!-- 拒绝授权提示 -->
+        <view v-else-if="!userStore.dataAuthorized && authRejected" class="status-card status-card--warning">
+          <view class="status-card-icon-wrap status-card-icon-wrap--gray">
+            <ShieldOff :size="24" color="#9CA3AF" />
+          </view>
+          <view class="status-card-text">
+            <text class="status-card-title">您未授权获取健康数据</text>
+            <text class="status-card-desc">授权后可为您提供个性化健康评估和体检推荐</text>
+          </view>
+          <view class="status-card-action" @tap="handleReAuth">
+            <text class="status-card-action-text">立即授权</text>
+          </view>
+        </view>
+
+        <!-- 同意授权但无数据提示 -->
+        <view v-else-if="userStore.dataAuthorized && !hasData" class="status-card status-card--info">
+          <view class="status-card-icon-wrap status-card-icon-wrap--gray">
+            <FileX :size="24" color="#9CA3AF" />
+          </view>
+          <view class="status-card-text">
+            <text class="status-card-title">目前没有获取到您在本院的健康数据</text>
+            <text class="status-card-desc">您可以使用以下服务开始健康管理</text>
+          </view>
+        </view>
+
+        <!-- 团检套餐通知横幅 -->
+        <view v-if="showGroupBanner && pagePhase === 'ready' && !showAuthPopup" class="group-banner" @tap="goGroupPackageDetail">
+          <view class="group-banner-icon">
+            <Building2 :size="18" color="#D97706" />
+          </view>
+          <text class="group-banner-text">您的企业已安排体检套餐，请确认</text>
+          <view class="group-banner-action">
+            <text class="group-banner-btn">查看</text>
+            <ChevronRight :size="14" color="#D97706" />
+          </view>
+        </view>
+
+        <!-- 有健康数据（仅授权且数据就绪时显示） -->
+        <view v-if="hasData && userStore.dataAuthorized && pagePhase === 'ready'" class="content-area">
+          <HealthCard
+            :score="healthStore.score?.score || 0"
+            :max-score="healthStore.score?.maxScore || 100"
+            :status="healthStore.score?.status || 'normal'"
+            :indicators="healthStore.indicators"
+            :last-date="healthStore.healthData?.lastCheckDate || ''"
+            @view-report="handleTabChange('health')"
+            @view-risk="enterChat('view-risk')"
+            @make-package="enterChat('make-package')"
+          />
+        </view>
+
+        <!-- 无健康数据 - 服务列表（拒绝授权或授权无数据时都显示） -->
+        <view v-if="pagePhase === 'ready' && !showAuthPopup && !hasData" class="content-area">
+          <view class="service-card">
+            <view class="service-title-row">
+              <view class="service-dot"></view>
+              <text class="service-title">我可以帮你</text>
             </view>
-            <ChevronRight :size="14" color="#C4C4C4" />
-          </view>
-        </view>
-      </view>
-
-      <!-- 对话消息区（卡片下方） -->
-      <view v-if="showChat" class="chat-messages">
-        <view class="chat-divider">
-          <view class="chat-divider-line"></view>
-          <text class="chat-divider-text">AI 对话</text>
-          <view class="chat-divider-line"></view>
-        </view>
-
-        <view v-for="msg in chatStore.messages" :key="msg.id" :id="'m-' + msg.id">
-          <ChatBubble :role="msg.role" :content="msg.content" :content-type="msg.contentType">
-            <template v-if="msg.contentType === 'image' && msg.imageUrl">
-              <image
-                :src="msg.imageUrl"
-                mode="widthFix"
-                class="chat-image"
-                @tap="previewImage(msg.imageUrl!)"
-              />
-            </template>
-            <template v-if="msg.contentType === 'options' && msg.options">
-              <OptionButtons :options="msg.options" @select="handleOption" />
-            </template>
-            <template v-if="msg.contentType === 'pdf' && msg.pdfFileName">
-              <view class="pdf-file-info">
-                <view class="pdf-icon-box">
-                  <text class="pdf-icon-text">PDF</text>
+            <text class="service-hint">请选择需要的服务：</text>
+            <view class="service-items">
+              <view class="service-item" @tap="enterChat('report-interpret')">
+                <view class="si-icon" style="background: #0D9488;">
+                  <FileSearch :size="20" color="#fff" />
                 </view>
-                <text class="pdf-file-name">{{ msg.pdfFileName }}</text>
+                <view class="si-text">
+                  <text class="si-title">体检报告解读</text>
+                  <text class="si-desc">上传报告，AI 为您逐项分析</text>
+                </view>
+                <ChevronRight :size="18" color="#9CA3AF" />
               </view>
-            </template>
-            <template v-if="msg.contentType === 'package-card' && msg.packageCard">
-              <PackageCard
-                :name="msg.packageCard.name"
-                :badge="msg.packageCard.badge"
-                :description="`含${msg.packageCard.items.slice(0,3).join('、')}等 ${msg.packageCard.items.length} 项检查，\n重点覆盖你的异常指标`"
-                :items="msg.packageCard.items"
-                :total-price="msg.packageCard.totalPrice"
-                :original-price="msg.packageCard.originalPrice"
-                @confirm="handleBookFromChat(msg.packageCard!)"
-                @customize="goPackageDetail(msg.packageCard!.id)"
-              />
-            </template>
-            <template v-if="msg.contentType === 'follow-up-plan' && msg.followUpPlan">
-              <FollowUpCard
-                :plan="msg.followUpPlan"
-                @book="handleFollowUpBook"
-              />
-            </template>
-          </ChatBubble>
+              <view class="service-item" @tap="enterChat('make-package')">
+                <view class="si-icon" style="background: #F59E0B;">
+                  <PackageCheck :size="20" color="#fff" />
+                </view>
+                <view class="si-text">
+                  <text class="si-title">制定体检套餐</text>
+                  <text class="si-desc">根据年龄和需求推荐体检项目</text>
+                </view>
+                <ChevronRight :size="18" color="#9CA3AF" />
+              </view>
+              <view class="service-item" @tap="enterChat('exam-process')">
+                <view class="si-icon" style="background: #3B82F6;">
+                  <Route :size="20" color="#fff" />
+                </view>
+                <view class="si-text">
+                  <text class="si-title">了解体检流程</text>
+                  <text class="si-desc">体检前中后注意事项和流程</text>
+                </view>
+                <ChevronRight :size="18" color="#9CA3AF" />
+              </view>
+              <view class="service-item" @tap="enterChat('consult')">
+                <view class="si-icon" style="background: #8B5CF6;">
+                  <CalendarCheck :size="20" color="#fff" />
+                </view>
+                <view class="si-text">
+                  <text class="si-title">预约咨询</text>
+                  <text class="si-desc">在线预约体检或咨询医生</text>
+                </view>
+                <ChevronRight :size="18" color="#9CA3AF" />
+              </view>
+            </view>
+          </view>
         </view>
 
-        <!-- Typing indicator -->
-        <view v-if="chatStore.isTyping" class="typing-row">
-          <view class="ai-avatar-typing">
-            <image src="/static/doctor.png" class="avatar-typing-img" />
+        <!-- 历史会话 -->
+        <view v-if="!showChat && sessionList.length > 0" class="history-section">
+          <view class="history-header" @tap="showHistory = !showHistory">
+            <view class="history-title-row">
+              <History :size="14" color="#9CA3AF" />
+              <text class="history-title">历史会话</text>
+              <text class="history-count">{{ sessionList.length }}条</text>
+            </view>
+            <ChevronDown v-if="!showHistory" :size="16" color="#9CA3AF" />
+            <ChevronUp v-if="showHistory" :size="16" color="#9CA3AF" />
           </view>
-          <view class="typing-dots">
-            <view class="dot"></view>
-            <view class="dot"></view>
-            <view class="dot"></view>
+          <view v-if="showHistory" class="history-list">
+            <view
+              v-for="s in sessionList"
+              :key="s.id"
+              class="history-item"
+              @tap="viewSession(s.id)"
+            >
+              <view class="history-item-content">
+                <text class="history-preview">{{ s.preview }}</text>
+                <text class="history-meta">{{ formatTime(s.timestamp) }} · {{ s.messageCount }}条消息</text>
+              </view>
+              <ChevronRight :size="14" color="#C4C4C4" />
+            </view>
           </view>
         </view>
+
+        <!-- 对话消息区 -->
+        <view v-if="showChat" class="chat-messages">
+          <view class="chat-divider">
+            <view class="chat-divider-line"></view>
+            <text class="chat-divider-text">AI 对话</text>
+            <view class="chat-divider-line"></view>
+          </view>
+
+          <view v-for="msg in chatStore.messages" :key="msg.id" :id="'m-' + msg.id">
+            <ChatBubble :role="msg.role" :content="msg.content" :content-type="msg.contentType">
+              <template v-if="msg.contentType === 'image' && msg.imageUrl">
+                <image
+                  :src="msg.imageUrl"
+                  mode="widthFix"
+                  class="chat-image"
+                  @tap="previewImage(msg.imageUrl!)"
+                />
+              </template>
+              <template v-if="msg.contentType === 'options' && msg.options">
+                <OptionButtons :options="msg.options" @select="handleOption" />
+              </template>
+              <template v-if="msg.contentType === 'pdf' && msg.pdfFileName">
+                <view class="pdf-file-info">
+                  <view class="pdf-icon-box">
+                    <text class="pdf-icon-text">PDF</text>
+                  </view>
+                  <text class="pdf-file-name">{{ msg.pdfFileName }}</text>
+                </view>
+              </template>
+              <template v-if="msg.contentType === 'package-card' && msg.packageCard">
+                <PackageCard
+                  :name="msg.packageCard.name"
+                  :badge="msg.packageCard.badge"
+                  :description="`含${msg.packageCard.items.slice(0,3).join('、')}等 ${msg.packageCard.items.length} 项检查，\n重点覆盖你的异常指标`"
+                  :items="msg.packageCard.items"
+                  :total-price="msg.packageCard.totalPrice"
+                  :original-price="msg.packageCard.originalPrice"
+                  @confirm="handleBookFromChat(msg.packageCard!)"
+                  @customize="openPackagePopup(msg.packageCard!.id)"
+                />
+              </template>
+              <template v-if="msg.contentType === 'follow-up-plan' && msg.followUpPlan">
+                <FollowUpCard
+                  :plan="msg.followUpPlan"
+                  @book="handleFollowUpBook"
+                />
+              </template>
+            </ChatBubble>
+          </view>
+
+          <!-- Typing indicator -->
+          <view v-if="chatStore.isTyping" class="typing-row">
+            <view class="ai-avatar-typing">
+              <image src="/static/doctor.png" class="avatar-typing-img" />
+            </view>
+            <view class="typing-dots">
+              <view class="dot"></view>
+              <view class="dot"></view>
+              <view class="dot"></view>
+            </view>
+          </view>
+        </view>
+
+        <view id="chat-bottom" style="height: 20px;"></view>
+      </scroll-view>
+
+      <!-- 健康档案 Tab -->
+      <scroll-view v-show="currentTab === 'health'" scroll-y class="page-scroll">
+        <view style="padding: 8px 4px;">
+          <HealthRecordView />
+        </view>
+      </scroll-view>
+
+      <!-- 个人中心 Tab -->
+      <scroll-view v-show="currentTab === 'profile'" scroll-y class="page-scroll">
+        <view style="padding: 8px 4px;">
+          <ProfileView />
+        </view>
+      </scroll-view>
+
+      <!-- 回到顶部按钮 -->
+      <view v-if="showBackToTop && currentTab === 'ai'" class="back-to-top" @tap="scrollToTop">
+        <ArrowUp :size="18" color="#0D9488" />
       </view>
 
-      <view id="chat-bottom" style="height: 20px;"></view>
-    </scroll-view>
-
-    <!-- 回到顶部按钮 -->
-    <view v-if="showBackToTop" class="back-to-top" @tap="scrollToTop">
-      <ArrowUp :size="18" color="#0D9488" />
-    </view>
-
-    <ChatInput @send="handleSend" @send-image="handleSendImage" @send-pdf="handleSendPdf" />
+      <ChatInput v-if="currentTab === 'ai'" @send="handleSend" @send-image="handleSendImage" @send-pdf="handleSendPdf" />
+    </template>
 
     <PendingPopup
       :visible="showPending"
@@ -218,18 +292,132 @@
       @close="showDatePicker = false"
       @confirm="handleDateTimeConfirm"
     />
+
+    <PackageDetailPopup
+      :visible="showPackagePopup"
+      :package-id="popupPackageId"
+      @close="showPackagePopup = false"
+      @book="handlePopupBook"
+    />
+
+    <!-- 加载数据弹窗 -->
+    <view v-if="pagePhase === 'loading'" class="loading-popup-mask">
+      <view class="loading-popup-bg"></view>
+      <view class="loading-popup-sheet">
+        <view class="sheet-handle"><view class="handle-bar"></view></view>
+        <view class="loading-header">
+          <view class="loading-spinner-wrap">
+            <view class="loading-spinner"></view>
+            <HeartPulse :size="24" color="#0D9488" class="loading-heart-icon" />
+          </view>
+          <text class="loading-title">正在获取您的健康数据</text>
+          <text class="loading-subtitle">请稍候，这可能需要几秒钟</text>
+        </view>
+
+        <view class="loading-steps">
+          <view
+            v-for="(step, i) in loadingSteps"
+            :key="i"
+            class="loading-step"
+            :class="{
+              'step-done': step.done,
+              'step-active': i === currentLoadingStep && !step.done,
+              'step-pending': i > currentLoadingStep,
+            }"
+          >
+            <view class="step-icon-wrap">
+              <view v-if="step.done" class="step-check">
+                <Check :size="14" color="#fff" />
+              </view>
+              <view v-else-if="i === currentLoadingStep" class="step-pulse">
+                <view class="step-pulse-dot"></view>
+              </view>
+              <view v-else class="step-dot"></view>
+            </view>
+            <text class="step-text">{{ step.label }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 数据授权弹窗 -->
+    <view v-if="showAuthPopup" class="auth-popup-mask">
+      <view class="auth-popup-bg" @tap="handleAuthReject"></view>
+      <view class="auth-popup-sheet">
+        <view class="sheet-handle"><view class="handle-bar"></view></view>
+        <view class="auth-popup-header">
+          <view class="auth-icon-wrap">
+            <view class="auth-icon-pulse-ring"></view>
+            <view class="auth-icon-pulse-ring auth-icon-pulse-ring--delay"></view>
+            <ShieldCheck :size="28" color="#0D9488" class="auth-icon-main" />
+          </view>
+          <view class="auth-popup-title-area">
+            <text class="auth-popup-title">健康数据授权</text>
+            <text class="auth-popup-subtitle">为了给您提供更精准的健康建议</text>
+          </view>
+        </view>
+
+        <view class="auth-items">
+          <view class="auth-item">
+            <view class="auth-item-icon" style="background: rgba(13, 148, 136, 0.1);">
+              <FileText :size="18" color="#0D9488" />
+            </view>
+            <view class="auth-item-text">
+              <text class="auth-item-title">就诊记录</text>
+              <text class="auth-item-desc">获取您在本院的历史就诊信息</text>
+            </view>
+          </view>
+          <view class="auth-item">
+            <view class="auth-item-icon" style="background: rgba(245, 158, 11, 0.1);">
+              <ClipboardList :size="18" color="#F59E0B" />
+            </view>
+            <view class="auth-item-text">
+              <text class="auth-item-title">体检报告</text>
+              <text class="auth-item-desc">读取您的体检数据和指标结果</text>
+            </view>
+          </view>
+          <view class="auth-item">
+            <view class="auth-item-icon" style="background: rgba(59, 130, 246, 0.1);">
+              <BrainCircuit :size="18" color="#3B82F6" />
+            </view>
+            <view class="auth-item-text">
+              <text class="auth-item-title">AI 健康分析</text>
+              <text class="auth-item-desc">基于数据为您生成个性化健康评估</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="auth-privacy">
+          <Lock :size="12" color="#9CA3AF" />
+          <text class="auth-privacy-text">您的数据将加密存储，不会分享给第三方</text>
+        </view>
+
+        <view class="auth-buttons">
+          <view class="auth-btn-primary" @tap="handleAuthAccept">
+            <text class="auth-btn-primary-text">同意授权</text>
+          </view>
+          <view class="auth-btn-secondary" @tap="handleAuthReject">
+            <text class="auth-btn-secondary-text">暂不授权</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, watch, reactive } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user';
 import { useHealthStore } from '@/stores/health';
 import { useChatStore } from '@/stores/chat';
-import { Sparkles, FileSearch, PackageCheck, Route, CalendarCheck, ChevronRight, ChevronDown, ChevronUp, History, Building2, ArrowUp } from 'lucide-vue-next';
+import {
+  Sparkles, FileSearch, PackageCheck, Route, CalendarCheck,
+  ChevronRight, ChevronDown, ChevronUp, History, Building2, ArrowUp,
+  ShieldCheck, ShieldOff, FileText, ClipboardList, BrainCircuit, Lock,
+  HeartPulse, Check, FileX, FileBarChart, UserRound,
+} from 'lucide-vue-next';
 import TopBar from '@/components/TopBar.vue';
-import MoreMenu from '@/components/MoreMenu.vue';
 import HealthCard from '@/components/HealthCard.vue';
 import ChatBubble from '@/components/ChatBubble.vue';
 import ChatInput from '@/components/ChatInput.vue';
@@ -238,13 +426,28 @@ import PackageCard from '@/components/PackageCard.vue';
 import FollowUpCard from '@/components/FollowUpCard.vue';
 import PendingPopup from '@/components/PendingPopup.vue';
 import DateTimePicker from '@/components/DateTimePicker.vue';
+import PackageDetailPopup from '@/components/PackageDetailPopup.vue';
+import HealthRecordView from '@/components/HealthRecordView.vue';
+import ProfileView from '@/components/ProfileView.vue';
 import type { ChatOption, PackageCardData } from '@/types/chat';
 
 const userStore = useUserStore();
 const healthStore = useHealthStore();
 const chatStore = useChatStore();
 
-const showMenu = ref(false);
+// 页面阶段: idle → loading → ready (授权改为弹窗)
+const pagePhase = ref<'idle' | 'loading' | 'ready'>('idle');
+const authRejected = ref(false);
+const showAuthPopup = ref(false);
+
+// Tab
+const currentTab = ref('ai');
+const tabs = [
+  { key: 'ai', label: 'AI 助手', icon: Sparkles },
+  { key: 'health', label: '健康档案', icon: FileBarChart },
+  { key: 'profile', label: '个人中心', icon: UserRound },
+];
+
 const showChat = ref(false);
 const showPending = ref(false);
 const showHistory = ref(false);
@@ -252,6 +455,10 @@ const scrollToId = ref('');
 const isViewingHistory = ref(false);
 const showDatePicker = ref(false);
 const pendingPackageCard = ref<PackageCardData | null>(null);
+
+// 套餐弹窗
+const showPackagePopup = ref(false);
+const popupPackageId = ref('');
 
 // 滚动相关
 const scrollPosition = ref(0);
@@ -264,18 +471,87 @@ const userName = computed(() => userStore.userName || '用户');
 const hasData = computed(() => healthStore.hasData);
 const showGroupBanner = computed(() => userStore.hasGroupPackage);
 
+// 加载动画步骤
+const loadingSteps = reactive([
+  { label: '连接医院信息系统', done: false },
+  { label: '获取就诊记录', done: false },
+  { label: '读取体检报告', done: false },
+  { label: '分析健康指标', done: false },
+  { label: '生成健康评估', done: false },
+]);
+const currentLoadingStep = ref(0);
+
+// ---- 授权处理 ----
+function handleAuthAccept() {
+  showAuthPopup.value = false;
+  userStore.setDataAuthResult(true);
+  authRejected.value = false;
+  pagePhase.value = 'loading';
+  runLoadingSequence();
+}
+
+function handleAuthReject() {
+  showAuthPopup.value = false;
+  userStore.setDataAuthResult(false);
+  authRejected.value = true;
+  pagePhase.value = 'ready';
+}
+
+function handleReAuth() {
+  showAuthPopup.value = true;
+}
+
+// ---- 加载动画序列 ----
+async function runLoadingSequence() {
+  const delays = [800, 700, 600, 700, 600];
+
+  for (let i = 0; i < loadingSteps.length; i++) {
+    currentLoadingStep.value = i;
+
+    // 第3步(index=2)时并行发起真实请求
+    if (i === 2) {
+      healthStore.loadHealthData().catch(() => {});
+    }
+
+    await sleep(delays[i]);
+    loadingSteps[i].done = true;
+  }
+
+  // 等待数据加载完成
+  await healthStore.loadHealthData().catch(() => {});
+
+  await sleep(500);
+  pagePhase.value = 'ready';
+
+  // ready 后检查团检弹窗
+  if (userStore.hasGroupPackage) {
+    showPending.value = true;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ---- Tab ----
+function handleTabChange(tab: string) {
+  currentTab.value = tab;
+}
+
 function onPageScroll(e: { detail: { scrollTop: number } }) {
   scrollPosition.value = e.detail.scrollTop;
 }
 
 function scrollToTop() {
-  forceScrollTop.value = undefined;
+  if (pagePhase.value !== 'ready') return;
+  scrollToId.value = '';
   nextTick(() => {
-    forceScrollTop.value = 0;
+    scrollToId.value = 'page-top';
   });
 }
 
 function scrollToBottom() {
+  if (pagePhase.value !== 'ready') return;
   nextTick(() => {
     scrollToId.value = '';
     nextTick(() => {
@@ -332,7 +608,7 @@ function previewImage(url: string) {
   uni.previewImage({ urls: [url], current: url });
 }
 
-// 流式输出时自动滚动到底部
+// 流式输出时自动滚动
 watch(
   () => chatStore.streamingMessageId,
   (newId) => {
@@ -348,8 +624,19 @@ watch(
   },
 );
 
-function goPackageDetail(id: string) {
-  uni.navigateTo({ url: `/pages/package/detail?id=${id}` });
+// 套餐弹窗
+function openPackagePopup(id: string) {
+  popupPackageId.value = id;
+  showPackagePopup.value = true;
+}
+
+function handlePopupBook(packageId: string) {
+  showPackagePopup.value = false;
+  const msg = chatStore.messages.find(m => m.packageCard?.id === packageId);
+  if (msg?.packageCard) {
+    pendingPackageCard.value = msg.packageCard;
+  }
+  showDatePicker.value = true;
 }
 
 function handleBookFromChat(packageCard: PackageCardData) {
@@ -393,24 +680,26 @@ function formatTime(timestamp: number): string {
 
 function handlePendingConfirm(data: { date: string; time: string }) {
   showPending.value = false;
-  const { date, time } = data;
-  uni.navigateTo({ url: `/pages/package/detail?id=pkg-group-001&date=${date}&time=${encodeURIComponent(time)}` });
+  openPackagePopup('pkg-group-001');
 }
 
 function goGroupPackageDetail() {
-  uni.navigateTo({ url: '/pages/package/detail?id=pkg-group-001' });
+  openPackagePopup('pkg-group-001');
 }
 
 onMounted(async () => {
-  await healthStore.loadHealthData();
-
-  if (userStore.hasGroupPackage) {
-    showPending.value = true;
+  const alreadyAuthorized = userStore.checkDataAuth();
+  if (alreadyAuthorized) {
+    pagePhase.value = 'loading';
+    runLoadingSequence();
+  } else {
+    pagePhase.value = 'ready';
+    showAuthPopup.value = true;
   }
 });
 
 onShow(() => {
-  if (showChat.value) {
+  if (pagePhase.value === 'ready' && showChat.value && currentTab.value === 'ai') {
     scrollToBottom();
   }
 });
@@ -438,8 +727,14 @@ onShow(() => {
   -ms-overflow-style: none;
 }
 
+/* ---- Hero ---- */
 .hero {
   padding: 4px 20px 16px;
+}
+
+.hero-fixed {
+  flex-shrink: 0;
+  padding: 0 12px;
 }
 
 .hello-row {
@@ -467,6 +762,615 @@ onShow(() => {
   letter-spacing: -0.3px;
   margin-top: 4px;
   display: block;
+}
+
+/* Hero 入场动画 */
+.hero-anim {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: heroFadeIn 0.5s ease forwards;
+}
+
+.hero-anim-1 { animation-delay: 0.05s; }
+.hero-anim-2 { animation-delay: 0.2s; }
+
+@keyframes heroFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sparkle-anim {
+  animation: sparkleEntry 0.5s ease 0.05s forwards, sparkleBounce 2.5s ease-in-out 0.6s infinite;
+  opacity: 0;
+}
+
+@keyframes sparkleEntry {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sparkleBounce {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(12deg) scale(1.15); }
+  40% { transform: rotate(-4deg) scale(0.95); }
+  60% { transform: rotate(6deg) scale(1.08); }
+  80% { transform: rotate(-2deg) scale(1); }
+}
+
+/* ---- Tab 切换 ---- */
+.tab-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 22px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  margin: 0 8px 8px;
+}
+
+.tab-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 18px;
+  transition: all 0.25s ease;
+
+  &:active { opacity: 0.7; }
+}
+
+.tab-pill--active {
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+}
+
+.tab-pill-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+  white-space: nowrap;
+}
+
+.tab-pill-text--active {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- 授权弹窗 ---- */
+.auth-popup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.auth-popup-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  animation: overlayFadeIn 0.2s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.auth-popup-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 500px;
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.97) 0%, rgba(255, 255, 255, 0.97) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 28px 28px 0 0;
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 -8px 40px rgba(13, 148, 136, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  animation: sheetSlideUp 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.sheet-handle {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 2px;
+}
+
+.handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(13, 148, 136, 0.2);
+}
+
+.auth-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible;
+}
+
+.auth-icon-main {
+  z-index: 1;
+  animation: authIconBounce 2s ease-in-out infinite;
+}
+
+@keyframes authIconBounce {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.12) rotate(4deg); }
+  60% { transform: scale(0.95) rotate(-2deg); }
+}
+
+.auth-icon-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 18px;
+  border: 2px solid rgba(13, 148, 136, 0.25);
+  animation: authPulseRing 2.5s ease-in-out infinite;
+}
+
+.auth-icon-pulse-ring--delay {
+  animation-delay: 1.25s;
+}
+
+@keyframes authPulseRing {
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+.auth-popup-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-popup-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-popup-subtitle {
+  font-size: 13px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-items {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.auth-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.auth-item-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-item-desc {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-privacy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.auth-privacy-text {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-buttons {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-btn-primary {
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.25);
+
+  &:active { opacity: 0.9; }
+}
+
+.auth-btn-primary-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.auth-btn-secondary {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:active { opacity: 0.7; }
+}
+
+.auth-btn-secondary-text {
+  font-size: 14px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* ---- 加载数据弹窗 ---- */
+.loading-popup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.loading-popup-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  animation: overlayFadeIn 0.2s ease;
+}
+
+.loading-popup-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 500px;
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.97) 0%, rgba(255, 255, 255, 0.97) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 28px 28px 0 0;
+  padding: 0 20px calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 -8px 40px rgba(13, 148, 136, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  animation: sheetSlideUp 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.loading-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-spinner-wrap {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(13, 148, 136, 0.12);
+  border-top-color: #0D9488;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-heart-icon {
+  z-index: 1;
+}
+
+.loading-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.loading-subtitle {
+  font-size: 13px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+  margin-top: -8px;
+}
+
+.loading-steps {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loading-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: stepFadeIn 0.35s ease forwards;
+}
+
+.step-pending {
+  opacity: 0;
+  animation: none;
+}
+
+.step-active {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(13, 148, 136, 0.2);
+}
+
+.step-done {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes stepFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.step-icon-wrap {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: #10B981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: checkPop 0.3s ease;
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.step-pulse {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(13, 148, 136, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: #0D9488;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: #D1D5DB;
+}
+
+.step-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.step-pending .step-text {
+  color: #D1D5DB;
+}
+
+/* ---- 状态卡片（授权等待/拒绝/无数据） ---- */
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  background: rgba(240, 253, 250, 0.6);
+  border-radius: 18px;
+  border: 1px solid rgba(13, 148, 136, 0.12);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 2px 12px rgba(13, 148, 136, 0.06);
+  animation: statusCardIn 0.4s ease;
+}
+
+.status-card--warning {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(156, 163, 175, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.status-card--info {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(156, 163, 175, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+@keyframes statusCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.status-card-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(13, 148, 136, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.status-card-icon-wrap--gray {
+  background: rgba(156, 163, 175, 0.08);
+}
+
+.status-card-pulse-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 17px;
+  border: 2px solid rgba(13, 148, 136, 0.2);
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.06); }
+}
+
+.status-card-icon {
+  z-index: 1;
+}
+
+.status-card-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.status-card-desc {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+  line-height: 1.4;
+}
+
+.status-card-action {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
+
+  &:active { opacity: 0.9; }
+}
+
+.status-card-action-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-family: "Noto Sans SC", sans-serif;
+  white-space: nowrap;
 }
 
 /* 团检通知横幅 */

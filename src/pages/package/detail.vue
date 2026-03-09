@@ -32,12 +32,12 @@
           <!-- 常规检查 -->
           <view class="section-header">
             <text class="section-title section-title--standard">常规检查</text>
-            <text class="section-count">{{ standardItems.length }}项</text>
+            <text class="section-count">{{ selectedStandardCount }}/{{ standardItems.length }}项</text>
           </view>
           <view class="items-list">
-            <view v-for="(item, i) in standardItems" :key="item.id" class="check-item">
-              <view class="item-dot" :style="{ background: itemColors[i % itemColors.length] + '20' }">
-                <view class="dot-circle" :style="{ background: itemColors[i % itemColors.length] }"></view>
+            <view v-for="item in standardItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+              <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
               </view>
               <view class="item-info">
                 <text class="item-name">{{ item.name }}</text>
@@ -57,13 +57,13 @@
                   <text class="ai-tag-text">AI</text>
                 </view>
               </view>
-              <text class="section-count">{{ aiAddonItems.length }}项</text>
+              <text class="section-count">{{ selectedAiCount }}/{{ aiAddonItems.length }}项</text>
             </view>
             <text class="ai-addon-hint">根据您的健康数据，AI 为您个性化推荐以下加项</text>
             <view class="items-list">
-              <view v-for="item in aiAddonItems" :key="item.id" class="check-item check-item--ai">
-                <view class="item-dot" :style="{ background: '#0D948820' }">
-                  <view class="dot-circle" :style="{ background: '#0D9488' }"></view>
+              <view v-for="item in aiAddonItems" :key="item.id" class="check-item check-item--ai" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+                <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                  <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
                 </view>
                 <view class="item-info">
                   <text class="item-name">{{ item.name }}</text>
@@ -80,11 +80,11 @@
 
         <!-- === 普通展示（无分类的套餐） === -->
         <template v-else>
-          <text class="items-title">检查项目 ({{ pkg.items.length }}项)</text>
+          <text class="items-title">检查项目 ({{ selectedCount }}/{{ pkg.items.length }}项)</text>
           <view class="items-list">
-            <view v-for="(item, i) in displayItems" :key="item.id" class="check-item">
-              <view class="item-dot" :style="{ background: itemColors[i % itemColors.length] + '20' }">
-                <view class="dot-circle" :style="{ background: itemColors[i % itemColors.length] }"></view>
+            <view v-for="item in displayItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+              <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
+                <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
               </view>
               <view class="item-info">
                 <text class="item-name">{{ item.name }}</text>
@@ -112,26 +112,19 @@
     <view class="bottom-bar" v-if="pkg">
       <view class="price-section">
         <view class="price-label-area">
-          <text class="price-label">套餐总价</text>
+          <text class="price-label">已选 {{ selectedCount }} 项</text>
           <view class="orig-price-row" v-if="pkg.originalPrice">
             <text class="orig-price">原价 ¥{{ pkg.originalPrice.toLocaleString() }}</text>
-            <view v-if="pkg.discount" class="discount-badge">
-              <text class="discount-text">-{{ Math.round((1 - pkg.discount / 10) * 100) }}%</text>
-            </view>
           </view>
         </view>
         <view class="price-value">
           <text class="price-symbol">¥</text>
-          <text class="price-num">{{ (pkg.totalPrice || 0).toLocaleString() }}</text>
+          <text class="price-num">{{ calculatedPrice.toLocaleString() }}</text>
         </view>
       </view>
 
       <view class="btn-row">
-        <view class="custom-btn" @tap="goCustomize">
-          <Settings2 :size="18" color="#0D9488" />
-          <text class="custom-text">自定义</text>
-        </view>
-        <view class="confirm-btn" @tap="handleConfirm">
+        <view class="confirm-btn confirm-btn--full" @tap="handleConfirm">
           <CalendarCheck :size="18" color="#fff" />
           <text class="confirm-text">立即预约</text>
         </view>
@@ -141,9 +134,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { ChevronLeft, Info, Settings2, CalendarCheck, Sparkles, BrainCircuit } from 'lucide-vue-next';
+import { ChevronLeft, Info, CalendarCheck, Sparkles, BrainCircuit } from 'lucide-vue-next';
 import { usePackageStore } from '@/stores/package';
 import { useAppointmentStore } from '@/stores/appointment';
 
@@ -157,10 +150,45 @@ statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 0;
 const showAll = ref(false);
 const packageId = ref('');
 
-// 检查项目使用彩色圆点标记
-const itemColors = ['#0D9488', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#0D9488', '#3B82F6'];
-
 const pkg = computed(() => packageStore.currentPackage);
+
+// 选中的项目 ID 集合
+const selectedIds = ref<Set<string>>(new Set());
+
+// 套餐加载后默认全选
+watch(pkg, (val) => {
+  if (val) {
+    selectedIds.value = new Set(val.items.map((item) => item.id));
+  }
+}, { immediate: true });
+
+function toggleItem(id: string) {
+  const s = new Set(selectedIds.value);
+  if (s.has(id)) {
+    s.delete(id);
+  } else {
+    s.add(id);
+  }
+  selectedIds.value = s;
+}
+
+// 计算选中项目的总价
+const calculatedPrice = computed(() => {
+  if (!pkg.value) return 0;
+  return pkg.value.items
+    .filter((item) => selectedIds.value.has(item.id))
+    .reduce((sum, item) => sum + (item.price || 0), 0);
+});
+
+const selectedCount = computed(() => selectedIds.value.size);
+
+const selectedStandardCount = computed(() => {
+  return standardItems.value.filter((item) => selectedIds.value.has(item.id)).length;
+});
+
+const selectedAiCount = computed(() => {
+  return aiAddonItems.value.filter((item) => selectedIds.value.has(item.id)).length;
+});
 
 const displayItems = computed(() => {
   if (!pkg.value) return [];
@@ -187,10 +215,6 @@ const aiAddonItems = computed(() => {
 
 function goBack() {
   uni.navigateBack();
-}
-
-function goCustomize() {
-  uni.navigateTo({ url: `/pages/package/customize?id=${packageId.value}` });
 }
 
 async function handleConfirm() {
@@ -371,8 +395,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(240, 253, 250, 0.6);
-  border: 1px solid rgba(13, 148, 136, 0.1);
+  background: rgba(240, 253, 250, 0.85);
+  border: 1px solid rgba(13, 148, 136, 0.18);
   border-radius: 16px;
   padding: 14px;
 }
@@ -386,12 +410,8 @@ onMounted(async () => {
 
 .check-item--ai {
   align-items: flex-start;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(13, 148, 136, 0.1);
-}
-
-.check-item--ai .item-dot {
-  margin-top: 2px;
+  background: rgba(255, 255, 255, 0.33);
+  border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .check-item--ai .item-price {
@@ -402,13 +422,13 @@ onMounted(async () => {
   margin-top: 4px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: rgba(13, 148, 136, 0.05);
-  border-left: 2px solid rgba(13, 148, 136, 0.3);
+  background: rgba(13, 148, 136, 0.08);
+  border-left: 2px solid rgba(13, 148, 136, 0.4);
 }
 
 .ai-reason-text {
   font-size: 11px;
-  color: #6B7280;
+  color: #4B5563;
   line-height: 1.6;
   font-family: "Noto Sans SC", sans-serif;
 }
@@ -430,19 +450,41 @@ onMounted(async () => {
   backdrop-filter: blur(8px);
 }
 
-.item-dot {
-  width: 32px;
-  height: 32px;
+.item-checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid #D1D5DB;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.15s;
 }
 
-.dot-circle {
-  width: 8px;
-  height: 8px;
-  border-radius: 4px;
+.item-checkbox--checked {
+  background: #0D9488;
+  border-color: #0D9488;
+}
+
+.checkbox-tick {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.check-item--unchecked {
+  opacity: 0.5;
+}
+
+.check-item--unchecked .item-name {
+  text-decoration: line-through;
+  color: #9CA3AF;
+}
+
+.check-item--unchecked .item-price {
+  color: #9CA3AF;
 }
 
 .note-icon-svg {
@@ -552,18 +594,6 @@ onMounted(async () => {
   font-family: "DM Sans", sans-serif;
 }
 
-.discount-badge {
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: #FEE2E2;
-}
-
-.discount-text {
-  font-size: 10px;
-  color: #EF4444;
-  font-weight: 600;
-}
-
 .price-value {
   display: flex;
   align-items: flex-end;
@@ -589,28 +619,6 @@ onMounted(async () => {
 .btn-row {
   display: flex;
   gap: 12px;
-}
-
-.custom-btn {
-  flex: 1;
-  height: 50px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.47);
-  border: 1.5px solid #0D9488;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  backdrop-filter: blur(12px);
-
-  &:active { opacity: 0.7; }
-}
-
-.custom-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: #0D9488;
-  font-family: "Noto Sans SC", sans-serif;
 }
 
 .confirm-btn {

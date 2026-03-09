@@ -6,14 +6,26 @@
     </view>
 
     <view class="bubble" :class="isAI ? 'ai-bubble' : 'user-bubble'">
-      <rich-text v-if="content" :nodes="renderedHtml" class="bubble-text md-content"></rich-text>
+      <view
+        v-if="content"
+        class="bubble-text-wrap"
+        :class="{ 'bubble-text-collapsed': isAI && isLong && !expanded }"
+        @tap="toggleExpand"
+      >
+        <rich-text :nodes="renderedHtml" class="bubble-text md-content"></rich-text>
+      </view>
+      <!-- 展开/收起按钮 -->
+      <view v-if="isAI && isLong" class="expand-toggle" @tap="toggleExpand">
+        <text class="expand-text">{{ expanded ? '收起' : '展开全文' }}</text>
+        <text class="expand-arrow" :class="{ 'expand-arrow--up': expanded }">›</text>
+      </view>
       <slot></slot>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { marked } from 'marked';
 
 const props = defineProps<{
@@ -23,6 +35,19 @@ const props = defineProps<{
 }>();
 
 const isAI = computed(() => props.role === 'ai');
+const expanded = ref(false);
+
+// 超过 200 字符认为是长消息
+const isLong = computed(() => {
+  if (!isAI.value || !props.content) return false;
+  return props.content.length > 200;
+});
+
+function toggleExpand() {
+  if (isAI.value && isLong.value) {
+    expanded.value = !expanded.value;
+  }
+}
 
 // 配置 marked
 marked.setOptions({
@@ -99,6 +124,47 @@ const renderedHtml = computed(() => {
 .bubble-text {
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* 折叠长消息 */
+.bubble-text-wrap {
+  overflow: hidden;
+  position: relative;
+}
+
+.bubble-text-collapsed {
+  max-height: 160px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+}
+
+.expand-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 0 0;
+
+  &:active { opacity: 0.6; }
+}
+
+.expand-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.expand-arrow {
+  font-size: 16px;
+  color: #0D9488;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+  line-height: 1;
+}
+
+.expand-arrow--up {
+  transform: rotate(-90deg);
 }
 </style>
 

@@ -9,32 +9,41 @@
           confirm-type="send"
           @confirm="send"
         />
-        <view @tap="showActionSheet">
-          <CirclePlus :size="20" class="plus-icon" />
+        <view @tap="showUploadPanel = !showUploadPanel">
+          <CirclePlus :size="20" class="plus-icon" :class="{ 'plus-active': showUploadPanel }" />
         </view>
       </view>
       <view class="send-btn" @tap="send">
         <SendIcon :size="18" class="send-icon" />
       </view>
     </view>
-    <!-- 隐藏的 PDF 文件选择器（仅 H5 环境使用） -->
-    <input
-      ref="pdfInputRef"
-      type="file"
-      accept=".pdf"
-      style="display: none;"
-      @change="handlePdfFileChange"
-    />
+
+    <!-- 自定义上传面板 -->
+    <view v-if="showUploadPanel" class="upload-panel">
+      <view class="upload-item" @tap="triggerImagePick">
+        <view class="upload-icon-wrap" style="background: #0D9488;">
+          <ImageIcon :size="20" color="#fff" />
+        </view>
+        <text class="upload-label">图片/拍照</text>
+      </view>
+      <view class="upload-item" @tap="triggerPdfPick">
+        <view class="upload-icon-wrap" style="background: #EF4444;">
+          <FileText :size="20" color="#fff" />
+        </view>
+        <text class="upload-label">PDF报告</text>
+      </view>
+    </view>
+
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { CirclePlus, Send as SendIcon } from 'lucide-vue-next';
+import { CirclePlus, Send as SendIcon, Image as ImageIcon, FileText } from 'lucide-vue-next';
 
 const emit = defineEmits(['send', 'sendImage', 'sendPdf']);
 const text = ref('');
-const pdfInputRef = ref<HTMLInputElement | null>(null);
+const showUploadPanel = ref(false);
 
 function send() {
   const msg = text.value.trim();
@@ -43,109 +52,80 @@ function send() {
   text.value = '';
 }
 
-function showActionSheet() {
-  uni.showActionSheet({
-    itemList: ['拍照', '从相册选择', '上传PDF报告'],
-    success: (res) => {
-      if (res.tapIndex === 2) {
-        choosePdf();
-      } else {
-        const sourceType = res.tapIndex === 0 ? ['camera'] : ['album'];
-        chooseImage(sourceType as ('camera' | 'album')[]);
-      }
-    },
+/** 动态创建 file input 并触发（绕过 uni-app ref 问题） */
+function pickFile(accept: string, onFile: (file: File) => void) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.style.display = 'none';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (file) onFile(file);
+    document.body.removeChild(input);
   });
+  document.body.appendChild(input);
+  input.click();
 }
 
-/** 选择 PDF 文件 */
-function choosePdf() {
+function triggerImagePick() {
+  showUploadPanel.value = false;
   // #ifdef H5
-  // H5 环境下使用隐藏的 file input
-  const input = pdfInputRef.value;
-  if (input) {
-    input.value = '';
-    input.click();
-  }
+  pickFile('image/*', (file) => {
+    if (!file.type.startsWith('image/')) {
+      uni.showToast({ title: '请选择图片文件', icon: 'none' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      uni.showToast({ title: '图片不能超过 10MB', icon: 'none' });
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const reader = new FileReader();
+    reader.onloadend = () => emit('sendImage', { base64: reader.result as string, url });
+    reader.readAsDataURL(file);
+  });
+  return;
   // #endif
   // #ifndef H5
-  // 非 H5 平台暂不支持 PDF（可在后续扩展）
+  uni.chooseImage({
+    count: 1,
+    sourceType: ['album', 'camera'],
+    sizeType: ['compressed'],
+    success: (res) => {
+      const tempFilePath = res.tempFilePaths[0];
+      if (tempFilePath) imageToBase64Native(tempFilePath);
+    },
+  });
+  // #endif
+}
+
+function triggerPdfPick() {
+  showUploadPanel.value = false;
+  // #ifdef H5
+  pickFile('.pdf,application/pdf', (file) => {
+    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+      uni.showToast({ title: '请选择 PDF 格式文件', icon: 'none' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      uni.showToast({ title: 'PDF 不能超过 10MB', icon: 'none' });
+      return;
+    }
+    const fileName = file.name;
+    const reader = new FileReader();
+    reader.onloadend = () => emit('sendPdf', { base64: reader.result as string, fileName });
+    reader.readAsDataURL(file);
+  });
+  return;
+  // #endif
+  // #ifndef H5
   uni.showToast({ title: '当前平台暂不支持 PDF 上传', icon: 'none' });
   // #endif
 }
 
-/** H5 环境：处理 PDF 文件选择 */
-function handlePdfFileChange(event: Event) {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-
-  // 验证文件类型
-  if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-    uni.showToast({ title: '请选择 PDF 格式文件', icon: 'none' });
-    return;
-  }
-
-  // 验证文件大小（限制 10MB）
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    uni.showToast({ title: 'PDF 文件不能超过 10MB', icon: 'none' });
-    return;
-  }
-
-  const fileName = file.name;
-  const reader = new FileReader();
-  reader.onloadend = () => {
-    const base64 = reader.result as string;
-    emit('sendPdf', { base64, fileName });
-  };
-  reader.onerror = () => {
-    console.error('PDF 文件读取失败');
-    uni.showToast({ title: 'PDF 文件读取失败', icon: 'none' });
-  };
-  reader.readAsDataURL(file);
-}
-
-function chooseImage(sourceType: ('camera' | 'album')[]) {
-  uni.chooseImage({
-    count: 1,
-    sourceType,
-    sizeType: ['compressed'],
-    success: (res) => {
-      const tempFilePath = res.tempFilePaths[0];
-      if (!tempFilePath) return;
-
-      // 将图片转为 base64
-      // #ifdef H5
-      imageToBase64H5(tempFilePath);
-      // #endif
-      // #ifndef H5
-      imageToBase64Native(tempFilePath);
-      // #endif
-    },
-  });
-}
-
-/** H5 平台：通过 fetch + FileReader 转 base64 */
-function imageToBase64H5(filePath: string) {
-  fetch(filePath)
-    .then((res) => res.blob())
-    .then((blob) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        emit('sendImage', { base64, url: filePath });
-      };
-      reader.readAsDataURL(blob);
-    })
-    .catch((err) => {
-      console.error('图片转 base64 失败:', err);
-      uni.showToast({ title: '图片处理失败', icon: 'none' });
-    });
-}
-
 /** 非 H5 平台：通过 uni.getFileSystemManager 转 base64 */
 function imageToBase64Native(filePath: string) {
-  // @ts-ignore - uni.getFileSystemManager 在非 H5 平台可用
+  // @ts-ignore
   const fsm = uni.getFileSystemManager();
   fsm.readFile({
     filePath,
@@ -153,11 +133,8 @@ function imageToBase64Native(filePath: string) {
     success: (res: { data: string }) => {
       const ext = filePath.split('.').pop()?.toLowerCase() || 'jpg';
       const mimeMap: Record<string, string> = {
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        gif: 'image/gif',
-        webp: 'image/webp',
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp',
       };
       const mime = mimeMap[ext] || 'image/jpeg';
       const base64 = `data:${mime};base64,${res.data}`;
@@ -189,7 +166,7 @@ function imageToBase64Native(filePath: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 20px;
+  padding-bottom: 8px;
 }
 
 .input-field {
@@ -214,10 +191,11 @@ function imageToBase64Native(filePath: string) {
 .plus-icon {
   color: #9CA3AF;
   flex-shrink: 0;
+  transition: color 0.15s;
+}
 
-  &:active {
-    color: #0D9488;
-  }
+.plus-active {
+  color: #0D9488;
 }
 
 .send-btn {
@@ -235,5 +213,38 @@ function imageToBase64Native(filePath: string) {
 
 .send-icon {
   color: #fff;
+}
+
+/* 上传面板 */
+.upload-panel {
+  display: flex;
+  gap: 24px;
+  padding: 12px 8px 16px;
+  justify-content: center;
+}
+
+.upload-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  &:active { opacity: 0.7; }
+}
+
+.upload-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-label {
+  font-size: 11px;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+  font-weight: 500;
 }
 </style>

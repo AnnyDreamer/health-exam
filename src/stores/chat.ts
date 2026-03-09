@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import type { ChatMessage, ChatOption, QwenMessage, PackageCardData, FollowUpPlan } from '@/types/chat';
 import type { ExamPackage } from '@/types/package';
 import { isQwenAvailable } from '@/api/qwen';
-import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT } from '@/services/aiChat';
+import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT } from '@/services/aiChat';
 import { useUserStore } from '@/stores/user';
 import { useHealthStore } from '@/stores/health';
 import { useAppointmentStore } from '@/stores/appointment';
@@ -16,6 +16,8 @@ const MAX_SESSIONS = 10;
 
 interface ChatSession {
   id: string;
+  userId: string;
+  userName: string;
   preview: string;
   timestamp: number;
   messageCount: number;
@@ -68,17 +70,8 @@ type ScriptStep = {
   packageCard?: ChatMessage['packageCard'];
 };
 
-/** 有数据用户先问关注方向再问预算 */
+/** 有数据用户：AI 基于就诊数据分析，直接问预算 */
 const makePackageWithDataScript: ScriptStep[] = [
-  {
-    aiMessage: '根据你的健康数据，我发现几个需要重点关注的方向。你希望这次体检 **重点关注哪个方面**？',
-    contentType: 'options',
-    options: [
-      { label: '心脑血管', value: 'focus_cardio' },
-      { label: '全面筛查', value: 'focus_comprehensive', primary: true },
-      { label: '肿瘤早筛', value: 'focus_tumor' },
-    ],
-  },
   {
     aiMessage: '好的！那你的 **体检预算** 大概是多少？',
     contentType: 'options',
@@ -320,19 +313,27 @@ export const useChatStore = defineStore('chat', () => {
   // 对话历史持久化
   // ============================================================
 
-  /** 将对话历史写入 storage */
+  /** 获取当前用户的 storage key 后缀 */
+  function _getUserId(): string {
+    const userStore = useUserStore();
+    return userStore.userInfo?.id || 'anonymous';
+  }
+
+  /** 将对话历史写入 storage（按用户隔离） */
   function _saveChatHistory() {
     try {
-      uni.setStorageSync(CHAT_HISTORY_KEY, JSON.stringify(messages.value));
+      const key = `${CHAT_HISTORY_KEY}_${_getUserId()}`;
+      uni.setStorageSync(key, JSON.stringify(messages.value));
     } catch (e) {
       console.warn('保存对话历史失败:', e);
     }
   }
 
-  /** 从 storage 加载对话历史 */
+  /** 从 storage 加载对话历史（按用户隔离） */
   function loadHistory(): ChatMessage[] | null {
     try {
-      const stored = uni.getStorageSync(CHAT_HISTORY_KEY);
+      const key = `${CHAT_HISTORY_KEY}_${_getUserId()}`;
+      const stored = uni.getStorageSync(key);
       if (stored) {
         return JSON.parse(stored);
       }
@@ -358,16 +359,17 @@ export const useChatStore = defineStore('chat', () => {
     return false;
   }
 
-  /** 清除 storage 中的对话历史 */
+  /** 清除 storage 中的对话历史（按用户隔离） */
   function clearHistory() {
     try {
-      uni.removeStorageSync(CHAT_HISTORY_KEY);
+      const key = `${CHAT_HISTORY_KEY}_${_getUserId()}`;
+      uni.removeStorageSync(key);
     } catch (e) {
       console.warn('清除对话历史失败:', e);
     }
   }
 
-  /** 是否有已保存的对话历史 */
+  /** 当前用户是否有已保存的对话历史 */
   function hasStoredHistory(): boolean {
     const history = loadHistory();
     return !!(history && history.length > 0);
@@ -393,11 +395,16 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const sessions = loadAllSessions();
+      const userStore = useUserStore();
+      const userId = userStore.userInfo?.id || 'anonymous';
+      const sessionUserName = userStore.userName || '用户';
       const firstAiMsg = messages.value.find(m => m.role === 'ai' && m.content && m.contentType === 'text');
       const preview = firstAiMsg?.content?.replace(/[#*\n]/g, '').slice(0, 40) || '对话记录';
 
       sessions.unshift({
         id: `session-${Date.now()}`,
+        userId,
+        userName: sessionUserName,
         preview,
         timestamp: Date.now(),
         messageCount: messages.value.length,
@@ -414,11 +421,14 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  /** 获取会话列表（不含完整消息体） */
+  /** 获取当前用户的会话列表（不含完整消息体） */
   function getSessionList(): Array<{ id: string; preview: string; timestamp: number; messageCount: number }> {
-    return loadAllSessions().map(({ id, preview, timestamp, messageCount }) => ({
-      id, preview, timestamp, messageCount,
-    }));
+    const userId = _getUserId();
+    return loadAllSessions()
+      .filter(s => s.userId === userId)
+      .map(({ id, preview, timestamp, messageCount }) => ({
+        id, preview, timestamp, messageCount,
+      }));
   }
 
   /** 恢复某个归档会话到当前视图（只读查看） */
@@ -678,18 +688,14 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    // 有数据用户选 make-package：先问关注方向，再问预算
+    // 有数据用户选 make-package：AI 已基于数据分析，直接问预算
     if (key === 'make-package') {
       const healthStore = useHealthStore();
       if (healthStore.hasData) {
+        // 如果已经有套餐卡片，不再显示预算选项
+        const hasPackageCard = messages.value.some(m => m.contentType === 'package-card');
+        if (hasPackageCard) return null;
         if (turn <= 1) {
-          return [
-            { label: '心脑血管', value: 'focus_cardio' },
-            { label: '全面筛查', value: 'focus_comprehensive', primary: true },
-            { label: '肿瘤早筛', value: 'focus_tumor' },
-          ];
-        }
-        if (turn <= 2) {
           return [
             { label: '1000以下', value: 'low' },
             { label: '1000-2000', value: 'mid', primary: true },
@@ -700,11 +706,9 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     if (key === 'report-interpret') {
-      if (turn <= 1) {
-        return [
-          { label: '推荐体检套餐', value: 'make-package', primary: true },
-        ];
-      }
+      // 用户还没上传报告时，不显示后续选项，等报告解读完后由 handleFollowUpPlanGeneration 追加
+      const hasUploadedReport = messages.value.some(m => m.contentType === 'image' || m.contentType === 'pdf');
+      if (!hasUploadedReport) return null;
     }
 
     if (key === 'exam-process') {
@@ -911,7 +915,7 @@ export const useChatStore = defineStore('chat', () => {
         return `我叫${name}，请帮我分析最近的体检报告中的健康风险，重点关注异常指标。${healthBlock}`;
       }
       if (key === 'make-package') {
-        return `我叫${name}，请根据我的健康数据，简要分析我需要重点关注哪些方面，然后问我这次体检最想关注哪个方向。不要直接推荐套餐，先了解我的需求。${healthBlock}`;
+        return `我叫${name}，我想定制体检方案。以下是我的全部健康数据，你已经拥有了，直接用就行：${healthBlock}\n\n请按照系统提示词的格式要求回复：先逐条列出异常指标和风险说明，再总结正常指标，最后问我预算。绝对不要让我提供任何资料。`;
       }
       return `我叫${name}，请根据我的健康数据给出建议。${healthBlock}`;
     }
@@ -946,9 +950,12 @@ export const useChatStore = defineStore('chat', () => {
       content: initialPrompt,
     });
 
-    // 无数据 make-package 使用引导式提示词
-    const useGuidedPrompt = key === 'make-package' && !hasHealthData;
-    await sendAIStream(conversationHistory.value, useGuidedPrompt ? GUIDED_PACKAGE_SYSTEM_PROMPT : undefined);
+    // 根据场景选择系统提示词
+    let systemPrompt: string | undefined;
+    if (key === 'make-package') {
+      systemPrompt = hasHealthData ? MAKE_PACKAGE_WITH_DATA_PROMPT : GUIDED_PACKAGE_SYSTEM_PROMPT;
+    }
+    await sendAIStream(conversationHistory.value, systemPrompt);
     aiTurnCount.value++;
 
     // 追加快捷操作选项

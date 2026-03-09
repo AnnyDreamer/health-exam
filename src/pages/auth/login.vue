@@ -109,6 +109,7 @@
         <text class="terms-teal">隐私政策</text>
       </view>
     </view>
+
   </view>
 </template>
 
@@ -482,4 +483,5 @@ async function handleLogin() {
   background: rgba(245, 158, 11, 0.12);
   color: #D97706;
 }
+
 </style>
