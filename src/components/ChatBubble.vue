@@ -35,7 +35,7 @@ const props = defineProps<{
 }>();
 
 const isAI = computed(() => props.role === 'ai');
-const expanded = ref(false);
+const expanded = ref(true);
 
 // 超过 200 字符认为是长消息
 const isLong = computed(() => {

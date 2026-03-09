@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import type { ChatMessage, ChatOption, QwenMessage, PackageCardData, FollowUpPlan } from '@/types/chat';
 import type { ExamPackage } from '@/types/package';
 import { isQwenAvailable } from '@/api/qwen';
-import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackage, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT } from '@/services/aiChat';
+import { sendChatMessage, interpretReport, interpretPdfReport, recommendPackageStream, generateFollowUpPlan, GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT } from '@/services/aiChat';
 import { useUserStore } from '@/stores/user';
 import { useReportStore } from '@/stores/report';
 import { useHealthStore } from '@/stores/health';
@@ -90,9 +90,9 @@ const makePackageWithDataScript: ScriptStep[] = [
     aiMessage: '好的！那你的 **体检预算** 大概是多少？',
     contentType: 'options',
     options: [
-      { label: '1000以下', value: 'low' },
-      { label: '1000-2000', value: 'mid', primary: true },
-      { label: '2000以上', value: 'high' },
+      { label: '1000以下 · 基础筛查', value: 'low' },
+      { label: '1000-2000 · 重点专项', value: 'mid', primary: true },
+      { label: '2000以上 · 深度全面', value: 'high' },
     ],
   },
   {
@@ -217,9 +217,9 @@ const makePackageGuidedScript: ScriptStep[] = [
     aiMessage: '最后一个问题～你的 **体检预算** 大概是多少？',
     contentType: 'options',
     options: [
-      { label: '1000以下', value: 'guided_budget_low' },
-      { label: '1000-2000', value: 'guided_budget_mid', primary: true },
-      { label: '2000以上', value: 'guided_budget_high' },
+      { label: '1000以下 · 基础筛查', value: 'guided_budget_low' },
+      { label: '1000-2000 · 重点专项', value: 'guided_budget_mid', primary: true },
+      { label: '2000以上 · 深度全面', value: 'guided_budget_high' },
     ],
   },
   {
@@ -372,6 +372,8 @@ export const useChatStore = defineStore('chat', () => {
   const scriptIndex = ref(0);
   const isTyping = ref(false);
   const lastFollowUpPlan = ref<FollowUpPlan | null>(null);
+  /** 会话归档版本号，递增触发 sessionList 刷新 */
+  const sessionVersion = ref(0);
 
   /** AI 对话上下文（发送给千问 API 的消息历史） */
   const conversationHistory = ref<QwenMessage[]>([]);
@@ -509,6 +511,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       uni.setStorageSync(CHAT_SESSIONS_KEY, JSON.stringify(sessions));
+      sessionVersion.value++;
     } catch (e) {
       console.warn('归档会话失败:', e);
     }
@@ -516,6 +519,8 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 获取当前用户的会话列表（不含完整消息体） */
   function getSessionList(): Array<{ id: string; preview: string; timestamp: number; messageCount: number }> {
+    // 读取 sessionVersion 使 computed 能感知归档变化
+    void sessionVersion.value;
     const userId = _getUserId();
     return loadAllSessions()
       .filter(s => s.userId === userId)
@@ -795,9 +800,9 @@ export const useChatStore = defineStore('chat', () => {
           ];
         case 10: // 预算
           return [
-            { label: '1000以下', value: 'guided_budget_low' },
-            { label: '1000-2000', value: 'guided_budget_mid', primary: true },
-            { label: '2000以上', value: 'guided_budget_high' },
+            { label: '1000以下 · 基础筛查', value: 'guided_budget_low' },
+            { label: '1000-2000 · 重点专项', value: 'guided_budget_mid', primary: true },
+            { label: '2000以上 · 深度全面', value: 'guided_budget_high' },
           ];
         default:
           return null;
@@ -842,9 +847,9 @@ export const useChatStore = defineStore('chat', () => {
         if (hasPackageCard) return null;
         if (turn <= 1) {
           return [
-            { label: '1000以下', value: 'low' },
-            { label: '1000-2000', value: 'mid', primary: true },
-            { label: '2000以上', value: 'high' },
+            { label: '1000以下 · 基础筛查', value: 'low' },
+            { label: '1000-2000 · 重点专项', value: 'mid', primary: true },
+            { label: '2000以上 · 深度全面', value: 'high' },
           ];
         }
       }
@@ -881,16 +886,23 @@ export const useChatStore = defineStore('chat', () => {
     ];
   }
 
-  /** 在 AI 回复后追加快捷操作选项 */
+  /** 在 AI 回复后追加快捷操作选项（附加到最后一条 AI 消息上） */
   function appendFollowUpOptions(afterPackage?: boolean) {
     const options = getFollowUpOptions(currentKey.value, aiTurnCount.value, afterPackage);
     if (options && options.length > 0) {
-      addMessage({
-        role: 'ai',
-        content: '',
-        contentType: 'options',
-        options,
-      });
+      // 找到最后一条 AI 消息，将选项附加上去（同一个气泡显示）
+      const lastAiMsg = [...messages.value].reverse().find(m => m.role === 'ai' && m.contentType !== 'options');
+      if (lastAiMsg) {
+        lastAiMsg.options = options;
+      } else {
+        // fallback：没有找到 AI 消息时，单独创建
+        addMessage({
+          role: 'ai',
+          content: '',
+          contentType: 'options',
+          options,
+        });
+      }
     }
   }
 
@@ -1290,13 +1302,22 @@ export const useChatStore = defineStore('chat', () => {
     appendFollowUpOptions();
   }
 
-  /** 处理套餐推荐流程 */
+  /** 处理套餐推荐流程（流式展示推荐理由） */
   async function handlePackageRecommendation(
     userContent: string,
     budget: 'low' | 'mid' | 'high',
   ) {
     conversationHistory.value.push({ role: 'user', content: userContent });
     isTyping.value = true;
+
+    // 先添加一条空的 AI 消息用于流式展示推荐理由
+    const reasonMsgId = addMessage({
+      role: 'ai',
+      content: '',
+      contentType: 'text',
+    });
+    streamingMessageId.value = reasonMsgId;
+    isTyping.value = false; // 停止 typing dots，开始打字效果
 
     try {
       // 收集健康数据传给套餐推荐
@@ -1325,24 +1346,34 @@ export const useChatStore = defineStore('chat', () => {
         : [];
       const guidedFocus = profile.focus ? [`关注方向：${profile.focus}`] : [];
 
-      const result = await recommendPackage(
+      const result = await recommendPackageStream(
         userProfile,
         {
           indicators: healthIndicators.length > 0 ? healthIndicators : guidedIndicators,
           riskFactors: riskFactors.length > 0 ? riskFactors : [...guidedIndicators, ...guidedFocus],
         },
         budget,
+        (chunk: string) => {
+          // 流式追加推荐理由文字到消息内容
+          const msg = messages.value.find((m) => m.id === reasonMsgId);
+          if (msg) {
+            msg.content += chunk;
+          }
+        },
+        () => {
+          // JSON 代码块开始：文字流式结束，新气泡显示生成提示
+          streamingMessageId.value = null;
+          addMessage({
+            role: 'ai',
+            content: '⏳ 正在为您生成体检方案...',
+            contentType: 'text',
+          });
+        },
       );
 
-      isTyping.value = false;
-
-      // 先添加一条文字说明
+      // 流式输出完成，确保 reason 消息内容最终一致
       const reasonMsg = result.reason || '根据你的需求和预算，我为你生成了这个方案：';
-      const reasonMsgId = addMessage({
-        role: 'ai',
-        content: reasonMsg,
-        contentType: 'text',
-      });
+      updateMessageContent(reasonMsgId, reasonMsg);
 
       // 构建套餐卡片数据
       const packageData: PackageCardData = {
@@ -1378,6 +1409,11 @@ export const useChatStore = defineStore('chat', () => {
 
       // 将 AI 生成的套餐保存到 package store
       savePackageToStore(packageData);
+      isTyping.value = false;
+
+      // 删除"正在生成"加载消息
+      const loadingIdx = messages.value.findIndex(m => m.content === '⏳ 正在为您生成体检方案...');
+      if (loadingIdx !== -1) messages.value.splice(loadingIdx, 1);
 
       addMessage({
         role: 'ai',
@@ -1393,16 +1429,22 @@ export const useChatStore = defineStore('chat', () => {
         content: `${reasonMsg}\n\n推荐套餐：${result.name}，包含${itemNames.join('、')}，价格${packageData.totalPrice}元`,
       });
       aiTurnCount.value++;
-
-      void reasonMsgId; // 避免 unused 警告
     } catch (error: unknown) {
       isTyping.value = false;
+      const errLoadingIdx = messages.value.findIndex(m => m.content === '⏳ 正在为您生成体检方案...');
+      if (errLoadingIdx !== -1) messages.value.splice(errLoadingIdx, 1);
       const errMsg = error instanceof Error ? error.message : '未知错误';
-      addMessage({
-        role: 'ai',
-        content: `抱歉，套餐推荐生成失败，请重试。\n\n(${errMsg})`,
-        contentType: 'text',
-      });
+      // 如果流式输出已经有内容了，在已有内容后追加错误信息
+      const currentMsg = messages.value.find((m) => m.id === reasonMsgId);
+      if (currentMsg && currentMsg.content) {
+        updateMessageContent(reasonMsgId, currentMsg.content + `\n\n抱歉，套餐方案生成失败，请重试。(${errMsg})`);
+      } else {
+        updateMessageContent(reasonMsgId, `抱歉，套餐推荐生成失败，请重试。\n\n(${errMsg})`);
+      }
+    } finally {
+      streamingMessageId.value = null;
+      // 流式输出完成后持久化对话历史
+      _saveChatHistory();
     }
   }
 

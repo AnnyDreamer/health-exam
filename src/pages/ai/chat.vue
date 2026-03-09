@@ -2,8 +2,35 @@
   <view class="chat-page">
     <TopBar
       :show-new-chat="showChat && currentTab === 'ai'"
+      :show-history="currentTab === 'ai' && sessionList.length > 0"
       @new-chat="handleNewChat"
+      @show-history="drawerVisible = true"
     />
+
+    <!-- 历史对话抽屉 -->
+    <view v-if="drawerVisible" class="drawer-mask" @tap="drawerVisible = false" />
+    <view class="drawer" :class="{ 'drawer-open': drawerVisible }">
+      <view class="drawer-header">
+        <text class="drawer-title">历史对话</text>
+        <view class="drawer-close" @tap="drawerVisible = false">
+          <text class="drawer-close-icon">×</text>
+        </view>
+      </view>
+      <scroll-view scroll-y class="drawer-body">
+        <view v-if="sessionList.length === 0" class="drawer-empty">
+          <text class="drawer-empty-text">暂无历史对话</text>
+        </view>
+        <view
+          v-for="s in sessionList"
+          :key="s.id"
+          class="drawer-item"
+          @tap="viewSession(s.id)"
+        >
+          <text class="drawer-item-preview">{{ s.preview }}</text>
+          <text class="drawer-item-meta">{{ formatTime(s.timestamp) }} · {{ s.messageCount }}条消息</text>
+        </view>
+      </scroll-view>
+    </view>
 
     <!-- 页面主体（始终渲染） -->
     <template v-if="true">
@@ -180,33 +207,6 @@
           </view>
         </view>
 
-        <!-- 历史会话 -->
-        <view v-if="!showChat && sessionList.length > 0" class="history-section">
-          <view class="history-header" @tap="showHistory = !showHistory">
-            <view class="history-title-row">
-              <History :size="14" color="#9CA3AF" />
-              <text class="history-title">历史会话</text>
-              <text class="history-count">{{ sessionList.length }}条</text>
-            </view>
-            <ChevronDown v-if="!showHistory" :size="16" color="#9CA3AF" />
-            <ChevronUp v-if="showHistory" :size="16" color="#9CA3AF" />
-          </view>
-          <view v-if="showHistory" class="history-list">
-            <view
-              v-for="s in sessionList"
-              :key="s.id"
-              class="history-item"
-              @tap="viewSession(s.id)"
-            >
-              <view class="history-item-content">
-                <text class="history-preview">{{ s.preview }}</text>
-                <text class="history-meta">{{ formatTime(s.timestamp) }} · {{ s.messageCount }}条消息</text>
-              </view>
-              <ChevronRight :size="14" color="#C4C4C4" />
-            </view>
-          </view>
-        </view>
-
         <!-- 对话消息区 -->
         <view v-if="showChat" class="chat-messages">
           <view class="chat-divider">
@@ -225,7 +225,7 @@
                   @tap="previewImage(msg.imageUrl!)"
                 />
               </template>
-              <template v-if="msg.contentType === 'options' && msg.options">
+              <template v-if="msg.options && msg.options.length > 0">
                 <OptionButtons :options="msg.options" @select="handleOption" />
               </template>
               <template v-if="msg.contentType === 'pdf' && msg.pdfFileName">
@@ -498,7 +498,8 @@ const tabs = [
 
 const showChat = ref(false);
 const showPending = ref(false);
-const showHistory = ref(false);
+const drawerVisible = ref(false);
+const sessionList = computed(() => chatStore.getSessionList());
 const scrollToId = ref('');
 const isViewingHistory = ref(false);
 const showDatePicker = ref(false);
@@ -521,8 +522,6 @@ const popupPackageId = ref('');
 const scrollPosition = ref(0);
 const forceScrollTop = ref<number | undefined>(undefined);
 const showBackToTop = computed(() => scrollPosition.value > 400);
-
-const sessionList = computed(() => chatStore.getSessionList());
 
 const userName = computed(() => userStore.userName || '用户');
 const hasData = computed(() => healthStore.hasData);
@@ -579,6 +578,10 @@ async function runLoadingSequence() {
 
   await sleep(500);
   pagePhase.value = 'ready';
+
+  // 标记已加载，下次回到首页不再显示加载动画
+  const userId = userStore.userInfo?.id || 'anonymous';
+  uni.setStorageSync(DATA_LOADED_KEY + '_' + userId, 'true');
 }
 
 function sleep(ms: number) {
@@ -683,6 +686,16 @@ watch(
       }, 300);
     }
   },
+);
+
+// 消息列表变化或 typing 状态变化时自动滚动到底部
+watch(
+  () => chatStore.messages.length,
+  () => scrollToBottom(),
+);
+watch(
+  () => chatStore.isTyping,
+  (val) => { if (val) scrollToBottom(); },
 );
 
 // 套餐弹窗
@@ -797,6 +810,7 @@ function viewSession(sessionId: string) {
   if (restored) {
     showChat.value = true;
     isViewingHistory.value = true;
+    drawerVisible.value = false;
     scrollToBottom();
   }
 }
@@ -820,11 +834,21 @@ function goGroupPackageDetail() {
   openPackagePopup('pkg-group-001');
 }
 
+const DATA_LOADED_KEY = 'health_exam_data_loaded';
+
 onMounted(async () => {
   const alreadyAuthorized = userStore.checkDataAuth();
   if (alreadyAuthorized) {
-    pagePhase.value = 'loading';
-    runLoadingSequence();
+    // 如果已经加载过数据，直接进入 ready，不再显示加载动画
+    const userId = userStore.userInfo?.id || 'anonymous';
+    const loadedFlag = uni.getStorageSync(DATA_LOADED_KEY + '_' + userId);
+    if (loadedFlag) {
+      await healthStore.loadHealthData().catch(() => {});
+      pagePhase.value = 'ready';
+    } else {
+      pagePhase.value = 'loading';
+      runLoadingSequence();
+    }
   } else {
     pagePhase.value = 'ready';
     showAuthPopup.value = true;
@@ -1871,77 +1895,112 @@ onShow(() => {
   &:active { background: rgba(255, 255, 255, 1); }
 }
 
-/* 历史会话 */
-.history-section {
-  margin-top: 4px;
+/* 抽屉 */
+.drawer-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 200;
 }
 
-.history-header {
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 75vw;
+  max-width: 280px;
+  background: linear-gradient(180deg, #E0F2F1, #F0F7F5 40%, #fff 100%);
+  z-index: 201;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+
+  &.drawer-open {
+    transform: translateX(0);
+  }
+}
+
+.drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 4px;
-
-  &:active { opacity: 0.7; }
+  padding: 56px 16px 14px;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.08);
 }
 
-.history-title-row {
+.drawer-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.drawer-close {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  border-radius: 14px;
+
+  &:active { background: rgba(0, 0, 0, 0.05); }
 }
 
-.history-title {
-  font-size: 13px;
-  font-weight: 500;
+.drawer-close-icon {
+  font-size: 22px;
+  color: #9CA3AF;
+  line-height: 1;
+}
+
+.drawer-body {
+  flex: 1;
+  padding: 12px;
+  width: auto;
+}
+
+.drawer-empty {
+  padding-top: 60px;
+  text-align: center;
+}
+
+.drawer-empty-text {
+  font-size: 14px;
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.history-count {
-  font-size: 11px;
-  color: #C4C4C4;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.history-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.drawer-item {
   padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.65);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(12px);
-
-  &:active { background: rgba(255, 255, 255, 0.8); }
-}
-
-.history-item-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
   overflow: hidden;
+
+  &:active { background: rgba(255, 255, 255, 0.9); }
 }
 
-.history-preview {
-  font-size: 13px;
+.drawer-item-preview {
+  font-size: 14px;
   font-weight: 500;
   color: #1A1A1A;
   font-family: "Noto Sans SC", sans-serif;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.history-meta {
+.drawer-item-meta {
+  display: block;
+  margin-top: 6px;
   font-size: 11px;
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;

@@ -4,7 +4,7 @@
  * 提供面向业务的 AI 对话接口，底层调用千问 API。
  * - sendChatMessage: 流式对话
  * - interpretReport: 多模态报告解读
- * - recommendPackage: 套餐推荐（结构化 JSON 返回）
+ * - recommendPackageStream: 套餐推荐（流式输出推荐理由 + 结构化 JSON）
  */
 import { qwenChatStream, qwenVisionStream, qwenDocStream, qwenChat } from '@/api/qwen';
 import type { QwenMessage, AIPackageRecommendation, FollowUpPlan } from '@/types/chat';
@@ -113,10 +113,26 @@ JSON 格式如下：
 - 如果所有指标正常，needFollowUp 设为 false，followUpItems 为空数组
 - generalAdvice 应包含饮食、运动等生活方式建议`;
 
-/** 套餐推荐系统提示词 */
+/** 套餐推荐系统提示词（流式版：先输出推荐理由文字，再输出 JSON） */
 const PACKAGE_SYSTEM_PROMPT = `你是一位专业的体检套餐推荐AI助手。请根据用户信息推荐个性化的体检套餐。
-你必须严格以 JSON 格式返回推荐结果，不要包含任何其他文字或 markdown 代码块标记。
-JSON 格式如下：
+
+你的回复必须分为两部分：
+
+第一部分（推荐理由）：
+用 markdown 格式输出推荐理由，结构清晰。格式要求：
+先用一句话总结方案定位，然后用列表逐条说明每个检查项目对应哪个风险指标，格式如：
+"根据您的健康数据，为您定制以下方案：
+
+- **心脏彩超、颈动脉彩超** ← 血压偏高(128/82)，排查血管病变
+- **血脂全套、同型半胱氨酸** ← 血脂三项超标，监测动脉硬化风险
+- **甲状腺功能全套、甲状腺彩超** ← TSH偏高，排查甲状腺功能异常
+
+整体方案覆盖您的主要风险点，帮助早发现早干预。"
+每条用 ← 箭头连接"检查项目"和"对应的风险原因"，让用户一目了然。
+
+第二部分（结构化数据）：
+在推荐理由之后，用 \`\`\`json 代码块输出结构化的套餐数据，格式如下：
+\`\`\`json
 {
   "name": "套餐名称",
   "badge": "AI定制",
@@ -125,19 +141,18 @@ JSON 格式如下：
     {"name": "项目2", "price": 120, "reason": "推荐理由"}
   ],
   "totalPrice": 1280,
-  "originalPrice": 1580,
-  "reason": "详细的推荐理由"
+  "originalPrice": 1580
 }
+\`\`\`
 
 请确保：
+- 先输出推荐理由文字，再输出 JSON 代码块
 - items 数组包含 5-10 个体检项目，每项都有 name、price 和 reason 字段
 - 每个 price 应为该单项的参考市场价格（单位：元），所有 price 之和应等于 originalPrice
 - totalPrice 应在用户预算范围内
 - originalPrice 应略高于 totalPrice
-- reason 必须使用 markdown 格式，结构清晰。格式要求：
-  先用一句话总结方案定位，然后用列表逐条说明每个检查项目对应哪个风险指标，格式如：
-  "根据您的健康数据，为您定制以下方案：\n\n- **心脏彩超、颈动脉彩超** ← 血压偏高(128/82)，排查血管病变\n- **血脂全套、同型半胱氨酸** ← 血脂三项超标，监测动脉硬化风险\n- **甲状腺功能全套、甲状腺彩超** ← TSH偏高，排查甲状腺功能异常\n\n整体方案覆盖您的主要风险点，帮助早发现早干预。"
-  每条用 ← 箭头连接"检查项目"和"对应的风险原因"，让用户一目了然`;
+- JSON 中不需要 reason 字段，推荐理由已经在第一部分文字中输出了
+- **绝对禁止使用表格（table）**`;
 
 /** 团检套餐推荐系统提示词 */
 const GROUP_PACKAGE_SYSTEM_PROMPT = `你是一位专业的企业团检套餐推荐AI助手。用户是企业团检员工，企业提供1000元体检额度。
@@ -315,17 +330,86 @@ export async function generateFollowUpPlan(
 }
 
 /**
- * 套餐推荐（返回结构化 JSON）
+ * 从 AI 返回的完整文本中提取推荐理由和 JSON 数据
  *
- * @param userProfile - 用户画像
- * @param healthData  - 健康数据摘要
- * @param budget      - 预算范围
+ * AI 返回格式：先是推荐理由文字，然后是 ```json ... ``` 代码块
+ */
+export function parsePackageResponse(fullText: string): {
+  reason: string;
+  packageData: AIPackageRecommendation | null;
+} {
+  // 尝试匹配 ```json ... ``` 代码块
+  const jsonBlockMatch = fullText.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+
+  let reason = fullText;
+  let packageData: AIPackageRecommendation | null = null;
+
+  if (jsonBlockMatch) {
+    // 提取 JSON 代码块之前的文字作为推荐理由
+    const jsonBlockStart = fullText.indexOf(jsonBlockMatch[0]);
+    reason = fullText.slice(0, jsonBlockStart).trim();
+
+    try {
+      const parsed = JSON.parse(jsonBlockMatch[1]) as AIPackageRecommendation;
+
+      // 验证必需字段
+      if (!parsed.name || !Array.isArray(parsed.items) || typeof parsed.totalPrice !== 'number') {
+        console.error('套餐推荐 JSON 数据格式不完整:', parsed);
+      } else {
+        packageData = {
+          name: parsed.name,
+          badge: parsed.badge || 'AI定制',
+          items: parsed.items,
+          totalPrice: parsed.totalPrice,
+          originalPrice: parsed.originalPrice,
+          reason: reason,
+        };
+      }
+    } catch (e) {
+      console.error('套餐推荐 JSON 解析失败:', e, jsonBlockMatch[1]);
+    }
+  } else {
+    // 没有 json 代码块，尝试直接从文本中提取 JSON（兼容旧格式）
+    try {
+      const jsonStr = fullText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+      const parsed = JSON.parse(jsonStr) as AIPackageRecommendation;
+      if (parsed.name && Array.isArray(parsed.items) && typeof parsed.totalPrice === 'number') {
+        reason = parsed.reason || '';
+        packageData = {
+          name: parsed.name,
+          badge: parsed.badge || 'AI定制',
+          items: parsed.items,
+          totalPrice: parsed.totalPrice,
+          originalPrice: parsed.originalPrice,
+          reason: reason,
+        };
+      }
+    } catch {
+      // 完全无法解析 JSON，reason 保持为全文
+    }
+  }
+
+  return { reason, packageData };
+}
+
+/**
+ * 套餐推荐（流式返回）
+ *
+ * AI 先输出推荐理由文字（流式展示），再输出 JSON 代码块（解析为套餐数据）。
+ * onReasonChunk 回调用于实时展示推荐理由的文字增量。
+ *
+ * @param userProfile    - 用户画像
+ * @param healthData     - 健康数据摘要
+ * @param budget         - 预算范围
+ * @param onReasonChunk  - 推荐理由文字的流式回调（仅回调 JSON 代码块之前的文字部分）
  * @returns 结构化的套餐推荐数据
  */
-export async function recommendPackage(
+export async function recommendPackageStream(
   userProfile: { name?: string; gender?: string; age?: number },
   healthData: { indicators?: string[]; riskFactors?: string[] },
   budget: 'low' | 'mid' | 'high',
+  onReasonChunk: (chunk: string) => void,
+  onJsonBlockStart?: () => void,
 ): Promise<AIPackageRecommendation> {
   const budgetMap: Record<string, string> = {
     low: '1000元以下',
@@ -356,35 +440,55 @@ export async function recommendPackage(
     },
   ];
 
-  const response = await qwenChat(messages, {
-    temperature: 0.3,
-    maxTokens: 1024,
-    responseFormat: { type: 'json_object' },
-  });
+  // 跟踪是否已经进入 JSON 代码块区域，以及已发送给回调的字符数
+  let inJsonBlock = false;
+  let accumulatedText = '';
+  let sentLength = 0; // 已通过 onReasonChunk 发送的字符数
 
-  const content = response.choices?.[0]?.message?.content || '';
+  const fullText = await qwenChatStream(messages, (chunk: string) => {
+    accumulatedText += chunk;
 
-  try {
-    // 尝试去除可能包裹的 markdown 代码块
-    const jsonStr = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/, '');
-    const parsed = JSON.parse(jsonStr) as AIPackageRecommendation;
+    if (inJsonBlock) return; // JSON 代码块内的 chunk 不回调
 
-    // 验证必需字段
-    if (!parsed.name || !Array.isArray(parsed.items) || typeof parsed.totalPrice !== 'number') {
-      throw new Error('返回数据格式不完整');
+    // 检查累积文本中是否出现了 ```json 标记
+    const jsonBlockStart = accumulatedText.indexOf('```json');
+    if (jsonBlockStart !== -1) {
+      // 进入 JSON 代码块，先把标记之前尚未发送的文字发出去，再通知
+      inJsonBlock = true;
+      if (jsonBlockStart > sentLength) {
+        onReasonChunk(accumulatedText.slice(sentLength, jsonBlockStart));
+        sentLength = jsonBlockStart;
+      }
+      onJsonBlockStart?.();
+      return;
     }
 
-    return {
-      name: parsed.name,
-      badge: parsed.badge || 'AI定制',
-      items: parsed.items,
-      totalPrice: parsed.totalPrice,
-      originalPrice: parsed.originalPrice,
-      reason: parsed.reason || '',
-    };
-  } catch (e) {
-    // JSON 解析失败时，构造一个默认推荐
-    console.error('套餐推荐 JSON 解析失败:', e, content);
-    throw new Error('AI 返回数据格式异常，请重试');
+    // 还没进入 JSON 块。为防止 ``` 被截断（跨 chunk 边界），
+    // 保留末尾最多 7 个字符（```json 长度）不发送
+    const holdBack = 7; // "```json" 的长度
+    const safeEnd = Math.max(sentLength, accumulatedText.length - holdBack);
+    if (safeEnd > sentLength) {
+      onReasonChunk(accumulatedText.slice(sentLength, safeEnd));
+      sentLength = safeEnd;
+    }
+  }, {
+    temperature: 0.3,
+    maxTokens: 2048,
+  });
+
+  // 流式结束后，如果没有进入 JSON 块，把剩余未发送的文字发出去
+  if (!inJsonBlock && sentLength < accumulatedText.length) {
+    onReasonChunk(accumulatedText.slice(sentLength));
   }
+
+  // 流式完成后，解析完整文本
+  const { reason, packageData } = parsePackageResponse(fullText);
+
+  if (packageData) {
+    return packageData;
+  }
+
+  // JSON 解析失败，抛出错误但保留 reason 文字（已经流式展示了）
+  console.error('套餐推荐完整文本:', fullText);
+  throw new Error('AI 返回数据格式异常，请重试');
 }

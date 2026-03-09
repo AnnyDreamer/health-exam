@@ -10,6 +10,7 @@
     { "path": "pages/package/customize", "style": { "navigationBarTitleText": "自定义套餐" } },
     { "path": "pages/appointment/index", "style": { "navigationBarTitleText": "我的预约" } },
     { "path": "pages/appointment/detail", "style": { "navigationBarTitleText": "预约详情" } },
+    { "path": "pages/ai/history", "style": { "navigationBarTitleText": "历史对话" } },
     { "path": "pages/user/profile", "style": { "navigationBarTitleText": "个人中心" } }
   ],
   "globalStyle": {

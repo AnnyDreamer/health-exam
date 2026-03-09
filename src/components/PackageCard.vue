@@ -82,6 +82,7 @@ defineEmits(['tap', 'confirm', 'customize']);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .pkg-name {
@@ -89,12 +90,16 @@ defineEmits(['tap', 'confirm', 'customize']);
   font-weight: 700;
   color: #1A1A1A;
   font-family: "Noto Sans SC", sans-serif;
+  flex: 1;
+  min-width: 0;
 }
 
 .ai-badge {
   padding: 2px 8px;
   border-radius: 8px;
   background: #0D9488;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .badge-text {

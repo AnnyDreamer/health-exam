@@ -5,8 +5,13 @@
         <view v-if="showBack" class="back-btn" @tap="goBack">
           <text class="icon-chevron">‹</text>
         </view>
-        <view v-if="!showBack && showNewChat" class="icon-btn" @tap="$emit('newChat')">
-          <SquarePen :size="16" class="tb-icon-teal" />
+        <view v-if="!showBack && showNewChat" class="new-chat-btn" @tap="$emit('newChat')">
+          <text class="new-chat-plus">+</text>
+          <text class="new-chat-label">新对话</text>
+        </view>
+        <view v-if="!showBack && showHistory" class="history-btn" @tap="$emit('showHistory')">
+          <text class="history-icon">☰</text>
+          <text class="history-label">历史</text>
         </view>
       </view>
 
@@ -18,15 +23,15 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { SquarePen } from 'lucide-vue-next';
 
 defineProps<{
   title?: string;
   showBack?: boolean;
   showNewChat?: boolean;
+  showHistory?: boolean;
 }>();
 
-defineEmits(['newChat']);
+defineEmits(['newChat', 'showHistory']);
 
 const NAV_HEIGHT = 48;
 
@@ -41,6 +46,7 @@ const totalHeight = computed(() => statusBarHeight.value + NAV_HEIGHT);
 function goBack() {
   uni.navigateBack();
 }
+
 </script>
 
 <style lang="scss" scoped>
@@ -65,6 +71,7 @@ function goBack() {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .back-btn {
@@ -86,20 +93,58 @@ function goBack() {
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(13, 148, 136, 0.2);
+.new-chat-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(13, 148, 136, 0.2);
   backdrop-filter: blur(8px);
+
+  &:active { opacity: 0.7; }
 }
 
-.tb-icon-teal {
+.new-chat-plus {
+  font-size: 18px;
+  font-weight: 500;
   color: #0D9488;
+  line-height: 1;
+  font-family: "DM Sans", sans-serif;
+}
+
+.new-chat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.history-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(8px);
+
+  &:active { opacity: 0.7; }
+}
+
+.history-icon {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1;
+}
+
+.history-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .top-bar-placeholder {
