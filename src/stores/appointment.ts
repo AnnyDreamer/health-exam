@@ -7,9 +7,16 @@ import {
   createAppointment as apiCreate,
   cancelAppointment as apiCancel,
 } from '@/api/appointment';
+import { useUserStore } from '@/stores/user';
 
-// Storage key 常量
-const APPOINTMENTS_KEY = 'health_exam_appointments';
+// Storage key 前缀，实际 key 会拼上用户 ID
+const APPOINTMENTS_KEY_PREFIX = 'health_exam_appointments_';
+
+function _getStorageKey(): string {
+  const userStore = useUserStore();
+  const userId = userStore.userInfo?.id || userStore.userInfo?.idCard || 'anonymous';
+  return APPOINTMENTS_KEY_PREFIX + userId;
+}
 
 export const useAppointmentStore = defineStore('appointment', () => {
   const appointments = ref<Appointment[]>([]);
@@ -22,7 +29,7 @@ export const useAppointmentStore = defineStore('appointment', () => {
   /** 从 storage 恢复预约数据 */
   function _restoreAppointments() {
     try {
-      const stored = uni.getStorageSync(APPOINTMENTS_KEY);
+      const stored = uni.getStorageSync(_getStorageKey());
       if (stored) {
         appointments.value = JSON.parse(stored);
       }
@@ -34,7 +41,7 @@ export const useAppointmentStore = defineStore('appointment', () => {
   /** 将预约数据同步写入 storage */
   function _saveAppointments() {
     try {
-      uni.setStorageSync(APPOINTMENTS_KEY, JSON.stringify(appointments.value));
+      uni.setStorageSync(_getStorageKey(), JSON.stringify(appointments.value));
     } catch (e) {
       console.warn('保存预约数据失败:', e);
     }
@@ -42,6 +49,8 @@ export const useAppointmentStore = defineStore('appointment', () => {
 
   async function loadAppointments() {
     loading.value = true;
+    // 先恢复当前用户的本地数据（切换用户后需要重新加载）
+    _restoreAppointments();
     try {
       const apiList = await getAppointmentList();
       // 合并 API 数据与本地存储的数据（以 API 为主，补充本地独有的）

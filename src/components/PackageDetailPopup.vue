@@ -124,7 +124,7 @@
             <view class="group-bottom-tags">
               <text class="group-bottom-tag">已选 {{ selectedCount }} 项</text>
               <text v-if="aiAddonDiscountedTotal > 0" class="group-bottom-tag group-bottom-tag--discount">AI加项已享{{ Math.round((pkg.aiAddonDiscount || 0.85) * 100) / 10 }}折</text>
-              <text v-if="aiAddonOriginalTotal > aiAddonDiscountedTotal" class="group-bottom-tag group-bottom-tag--orig">原价 ¥{{ aiAddonOriginalTotal.toLocaleString() }}</text>
+              <text v-if="aiAddonDiscountedTotal > 0" class="group-bottom-tag">折后 ¥{{ aiAddonDiscountedTotal.toLocaleString() }}</text>
             </view>
           </view>
         </template>
@@ -453,11 +453,12 @@ function handleConfirm() {
 
 .ai-reason {
   margin-top: 2px;
-  margin-left: 32px;
   padding: 6px 8px;
   border-radius: 8px;
   background: rgba(13, 148, 136, 0.08);
   border-left: 2px solid rgba(13, 148, 136, 0.4);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ai-reason-text {

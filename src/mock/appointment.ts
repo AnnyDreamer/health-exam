@@ -2,25 +2,7 @@ import { registerMock } from '@/api/request';
 import type { Appointment } from '@/types/appointment';
 import { usePackageStore } from '@/stores/package';
 
-const mockAppointments: Appointment[] = [
-  {
-    id: 'apt-001',
-    packageId: 'pkg-ai-001',
-    packageName: '心脑血管专项套餐',
-    date: '2026-03-20',
-    time: '08:00-09:00',
-    location: '健康体检中心 3楼 VIP区',
-    status: 'confirmed',
-    items: ['一般检查', '生化全套', '心脏彩超', '颈动脉彩超', '甲状腺功能', '腹部B超', '心电图'],
-    totalPrice: 780,
-    createdAt: '2026-03-09',
-    notice: [
-      '体检前一天请清淡饮食，晚上10点后禁食禁水',
-      '体检当天空腹前往',
-      '请携带身份证原件',
-    ],
-  },
-];
+const mockAppointments: Appointment[] = [];
 
 let appointmentId = 1;
 

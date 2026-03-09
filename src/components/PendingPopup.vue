@@ -43,21 +43,12 @@
       <!-- 次要操作 -->
       <text class="later-text" @tap="handleClose">稍后提醒</text>
     </view>
-
-    <!-- DateTimePicker 底部弹出（覆盖在弹窗之上） -->
-    <DateTimePicker
-      v-if="showDatePicker"
-      :visible="showDatePicker"
-      @close="showDatePicker = false"
-      @confirm="handleDateTimeConfirm"
-    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { X, Gift } from 'lucide-vue-next';
-import DateTimePicker from '@/components/DateTimePicker.vue';
 
 const props = defineProps<{
   visible: boolean;
@@ -72,10 +63,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'confirm', data: { date: string; time: string }): void;
+  (e: 'confirm'): void;
 }>();
-
-const showDatePicker = ref(false);
 
 const descriptionText = computed(() => {
   if (props.companyName) {
@@ -85,17 +74,11 @@ const descriptionText = computed(() => {
 });
 
 function handleConfirmTap() {
-  showDatePicker.value = true;
+  emit('confirm');
 }
 
 function handleClose() {
-  showDatePicker.value = false;
   emit('close');
-}
-
-function handleDateTimeConfirm(data: { date: string; time: string }) {
-  showDatePicker.value = false;
-  emit('confirm', data);
 }
 </script>
 

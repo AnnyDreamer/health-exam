@@ -195,17 +195,6 @@
             <view class="chat-divider-line"></view>
           </view>
 
-          <!-- 引导流程进度条 -->
-          <view v-if="chatStore.guidedStep > 0" class="guided-progress">
-            <view class="progress-info">
-              <text class="progress-label">问题进度</text>
-              <text class="progress-count">{{ chatStore.guidedStep }}/{{ chatStore.GUIDED_TOTAL_STEPS }}</text>
-            </view>
-            <view class="progress-track">
-              <view class="progress-fill" :style="{ width: (chatStore.guidedStep / chatStore.GUIDED_TOTAL_STEPS * 100) + '%' }"></view>
-            </view>
-          </view>
-
           <view v-for="msg in chatStore.messages" :key="msg.id" :id="'m-' + msg.id">
             <ChatBubble :role="msg.role" :content="msg.content" :content-type="msg.contentType">
               <template v-if="msg.contentType === 'image' && msg.imageUrl">
@@ -288,6 +277,16 @@
         <ArrowUp :size="18" color="#0D9488" />
       </view>
 
+      <!-- 引导流程进度条 - 固定在输入框上方 -->
+      <view v-if="chatStore.guidedStep > 0 && currentTab === 'ai'" class="guided-progress">
+        <view class="progress-info">
+          <text class="progress-label">问题进度</text>
+          <text class="progress-count">{{ chatStore.guidedStep }}/{{ chatStore.GUIDED_TOTAL_STEPS }}</text>
+        </view>
+        <view class="progress-track">
+          <view class="progress-fill" :style="{ width: (chatStore.guidedStep / chatStore.GUIDED_TOTAL_STEPS * 100) + '%' }"></view>
+        </view>
+      </view>
       <ChatInput v-if="currentTab === 'ai'" @send="handleSend" @send-image="handleSendImage" @send-pdf="handleSendPdf" />
     </template>
 
@@ -704,7 +703,7 @@ function formatTime(timestamp: number): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function handlePendingConfirm(data: { date: string; time: string }) {
+function handlePendingConfirm() {
   showPending.value = false;
   openPackagePopup('pkg-group-001');
 }

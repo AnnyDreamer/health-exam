@@ -124,8 +124,8 @@ defineEmits(['tap', 'confirm', 'customize']);
 
 .price-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .price-area {
@@ -205,6 +205,7 @@ defineEmits(['tap', 'confirm', 'customize']);
 .btn-row {
   display: flex;
   gap: 8px;
+  align-self: flex-end;
 }
 
 .adj-btn {
