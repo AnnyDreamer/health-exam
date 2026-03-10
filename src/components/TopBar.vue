@@ -5,13 +5,13 @@
         <view v-if="showBack" class="back-btn" @tap="goBack">
           <text class="icon-chevron">‹</text>
         </view>
-        <view v-if="!showBack && showNewChat" class="new-chat-btn" @tap="$emit('newChat')">
-          <text class="new-chat-plus">+</text>
-          <text class="new-chat-label">新对话</text>
-        </view>
         <view v-if="!showBack && showHistory" class="history-btn" @tap="$emit('showHistory')">
           <text class="history-icon">☰</text>
           <text class="history-label">历史</text>
+        </view>
+        <view v-if="!showBack && showNewChat" class="new-chat-btn" @tap="$emit('newChat')">
+          <text class="new-chat-plus">+</text>
+          <text class="new-chat-label">新对话</text>
         </view>
       </view>
 

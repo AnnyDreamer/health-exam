@@ -181,7 +181,11 @@ const selectedIds = ref<Set<string>>(new Set());
 // 加载套餐数据
 watch(() => props.packageId, async (id) => {
   if (id) {
-    await packageStore.loadPackageDetail(id);
+    try {
+      await packageStore.loadPackageDetail(id);
+    } catch (e) {
+      console.error('加载套餐详情失败:', e);
+    }
   }
 }, { immediate: true });
 

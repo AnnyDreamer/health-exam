@@ -582,6 +582,11 @@ async function runLoadingSequence() {
   // 标记已加载，下次回到首页不再显示加载动画
   const userId = userStore.userInfo?.id || 'anonymous';
   uni.setStorageSync(DATA_LOADED_KEY + '_' + userId, 'true');
+
+  // 团检用户：自动弹出团检套餐确认弹窗
+  if (showGroupBanner.value) {
+    showPending.value = true;
+  }
 }
 
 function sleep(ms: number) {
@@ -845,6 +850,10 @@ onMounted(async () => {
     if (loadedFlag) {
       await healthStore.loadHealthData().catch(() => {});
       pagePhase.value = 'ready';
+      // 团检用户：自动弹出团检套餐确认弹窗
+      if (showGroupBanner.value) {
+        showPending.value = true;
+      }
     } else {
       pagePhase.value = 'loading';
       runLoadingSequence();
