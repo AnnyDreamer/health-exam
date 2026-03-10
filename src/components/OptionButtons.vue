@@ -4,12 +4,15 @@
       v-for="opt in options"
       :key="opt.value"
       class="opt-btn"
-      :class="opt.primary ? 'opt-primary' : 'opt-secondary'"
-      @tap="$emit('select', opt)"
+      :class="[
+        opt.value === selectedValue ? 'opt-selected' : 'opt-normal',
+        { 'opt-disabled': !!selectedValue && opt.value !== selectedValue }
+      ]"
+      @tap="handleTap(opt)"
     >
       <text
         class="opt-text"
-        :class="opt.primary ? 'opt-text-primary' : 'opt-text-secondary'"
+        :class="opt.value === selectedValue ? 'opt-text-selected' : 'opt-text-normal'"
       >{{ opt.label }}</text>
     </view>
   </view>
@@ -18,8 +21,17 @@
 <script setup lang="ts">
 import type { ChatOption } from '@/types/chat';
 
-defineProps<{ options: ChatOption[] }>();
-defineEmits(['select']);
+const props = defineProps<{
+  options: ChatOption[];
+  selectedValue?: string;
+}>();
+
+const emit = defineEmits(['select']);
+
+function handleTap(opt: ChatOption) {
+  if (props.selectedValue) return;
+  emit('select', opt);
+}
 </script>
 
 <style lang="scss" scoped>
@@ -32,20 +44,27 @@ defineEmits(['select']);
 .opt-btn {
   padding: 8px 14px;
   border-radius: 16px;
+  transition: all 0.2s;
 
   &:active { opacity: 0.7; }
 }
 
-/* 主要选项: teal-50 背景 + teal 边框 */
-.opt-primary {
-  background: #F0FDFA;
+/* 未选中状态：统一灰色 */
+.opt-normal {
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+}
+
+/* 选中状态：teal 实心 */
+.opt-selected {
+  background: #0D9488;
   border: 1px solid #0D9488;
 }
 
-/* 次要选项: 灰色背景 + 灰色边框 */
-.opt-secondary {
-  background: #F3F4F6;
-  border: 1px solid #E5E7EB;
+/* 已有选中项时，其他按钮变淡 */
+.opt-disabled {
+  opacity: 0.5;
+  &:active { opacity: 0.5; }
 }
 
 .opt-text {
@@ -53,13 +72,13 @@ defineEmits(['select']);
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.opt-text-primary {
-  color: #0D9488;
-  font-weight: 500;
+.opt-text-normal {
+  color: #374151;
+  font-weight: 400;
 }
 
-.opt-text-secondary {
-  color: #6B7280;
-  font-weight: 400;
+.opt-text-selected {
+  color: #fff;
+  font-weight: 500;
 }
 </style>

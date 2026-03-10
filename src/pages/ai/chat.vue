@@ -226,7 +226,7 @@
                 />
               </template>
               <template v-if="msg.options && msg.options.length > 0">
-                <OptionButtons :options="msg.options" @select="handleOption" />
+                <OptionButtons :options="msg.options" :selected-value="msg.selectedOption" @select="(opt: any) => handleOptionWithMark(msg, opt)" />
               </template>
               <template v-if="msg.contentType === 'pdf' && msg.pdfFileName">
                 <view class="pdf-file-info">
@@ -238,7 +238,7 @@
               </template>
               <template v-if="msg.contentType === 'loading'">
                 <view class="loading-msg">
-                  <view class="loading-spinner"></view>
+                  <view class="gen-spinner"></view>
                   <text class="loading-msg-text">{{ msg.content }}</text>
                   <view class="loading-dots-anim">
                     <text class="ld">.</text><text class="ld ld2">.</text><text class="ld ld3">.</text>
@@ -486,7 +486,7 @@ import PaymentPopup from '@/components/PaymentPopup.vue';
 import PackageDetailPopup from '@/components/PackageDetailPopup.vue';
 import HealthRecordView from '@/components/HealthRecordView.vue';
 import ProfileView from '@/components/ProfileView.vue';
-import type { ChatOption, PackageCardData } from '@/types/chat';
+import type { ChatMessage, ChatOption, PackageCardData } from '@/types/chat';
 
 const userStore = useUserStore();
 const healthStore = useHealthStore();
@@ -634,6 +634,11 @@ async function enterChat(key: string) {
   chatStore.reset();
   await chatStore.startScript(key, hasData.value, userName.value);
   scrollToBottom();
+}
+
+function handleOptionWithMark(msg: ChatMessage, opt: ChatOption) {
+  msg.selectedOption = opt.value;
+  handleOption(opt);
 }
 
 async function handleOption(opt: ChatOption) {
@@ -1852,16 +1857,16 @@ onShow(() => {
   padding: 2px 0;
 }
 
-.loading-spinner {
+.gen-spinner {
   width: 18px;
   height: 18px;
   border: 2px solid rgba(13, 148, 136, 0.2);
   border-top-color: #0D9488;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: genSpin 0.8s linear infinite;
 }
 
-@keyframes spin {
+@keyframes genSpin {
   to { transform: rotate(360deg); }
 }
 
