@@ -7,7 +7,7 @@
 
     <view class="bubble" :class="isAI ? 'ai-bubble' : 'user-bubble'">
       <view
-        v-if="content"
+        v-if="content && contentType !== 'loading'"
         class="bubble-text-wrap"
         :class="{ 'bubble-text-collapsed': isAI && isLong && !expanded }"
         @tap="toggleExpand"

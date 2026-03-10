@@ -1365,8 +1365,8 @@ export const useChatStore = defineStore('chat', () => {
           streamingMessageId.value = null;
           addMessage({
             role: 'ai',
-            content: '⏳ 正在为您生成体检方案...',
-            contentType: 'text',
+            content: '正在为您生成体检方案',
+            contentType: 'loading',
           });
         },
       );
@@ -1412,7 +1412,7 @@ export const useChatStore = defineStore('chat', () => {
       isTyping.value = false;
 
       // 删除"正在生成"加载消息
-      const loadingIdx = messages.value.findIndex(m => m.content === '⏳ 正在为您生成体检方案...');
+      const loadingIdx = messages.value.findIndex(m => m.contentType === 'loading');
       if (loadingIdx !== -1) messages.value.splice(loadingIdx, 1);
 
       addMessage({
@@ -1431,7 +1431,7 @@ export const useChatStore = defineStore('chat', () => {
       aiTurnCount.value++;
     } catch (error: unknown) {
       isTyping.value = false;
-      const errLoadingIdx = messages.value.findIndex(m => m.content === '⏳ 正在为您生成体检方案...');
+      const errLoadingIdx = messages.value.findIndex(m => m.contentType === 'loading');
       if (errLoadingIdx !== -1) messages.value.splice(errLoadingIdx, 1);
       const errMsg = error instanceof Error ? error.message : '未知错误';
       // 如果流式输出已经有内容了，在已有内容后追加错误信息

@@ -2,6 +2,7 @@ export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancell
 
 export interface Appointment {
   id: string;
+  userId?: string;
   packageId: string;
   packageName: string;
   date: string;

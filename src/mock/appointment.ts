@@ -1,10 +1,20 @@
 import { registerMock } from '@/api/request';
 import type { Appointment } from '@/types/appointment';
 import { usePackageStore } from '@/stores/package';
+import { useUserStore } from '@/stores/user';
 
 const mockAppointments: Appointment[] = [];
 
 let appointmentId = 1;
+
+function _getCurrentUserId(): string {
+  try {
+    const userStore = useUserStore();
+    return userStore.userInfo?.id || userStore.userInfo?.idCard || 'anonymous';
+  } catch {
+    return 'anonymous';
+  }
+}
 
 // 套餐名和项目映射（用于创建预约时填充真实数据）
 const packageInfoMap: Record<string, { name: string; items: string[]; price: number }> = {
@@ -35,7 +45,10 @@ function findAppointment(id: string) {
 }
 
 export function setupAppointmentMock() {
-  registerMock('/appointment/list', () => mockAppointments);
+  registerMock('/appointment/list', () => {
+    const userId = _getCurrentUserId();
+    return mockAppointments.filter((a) => a.userId === userId);
+  });
 
   // 动态 detail 路由：匹配所有 /appointment/detail/:id
   registerMock('/appointment/detail', (_data: any, url?: string) => {
@@ -70,6 +83,7 @@ export function setupAppointmentMock() {
     }
     const newApt: Appointment = {
       id: `apt-new-${++appointmentId}`,
+      userId: _getCurrentUserId(),
       packageId: data.packageId,
       packageName: pkgInfo.name,
       date: data.date,

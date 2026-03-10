@@ -236,6 +236,15 @@
                   <text class="pdf-file-name">{{ msg.pdfFileName }}</text>
                 </view>
               </template>
+              <template v-if="msg.contentType === 'loading'">
+                <view class="loading-msg">
+                  <view class="loading-spinner"></view>
+                  <text class="loading-msg-text">{{ msg.content }}</text>
+                  <view class="loading-dots-anim">
+                    <text class="ld">.</text><text class="ld ld2">.</text><text class="ld ld3">.</text>
+                  </view>
+                </view>
+              </template>
               <template v-if="msg.contentType === 'package-card' && msg.packageCard">
                 <PackageCard
                   :name="msg.packageCard.name"
@@ -1833,6 +1842,53 @@ onShow(() => {
 @keyframes dotPulse {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
+}
+
+/* 加载消息（生成体检方案） */
+.loading-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(13, 148, 136, 0.2);
+  border-top-color: #0D9488;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-msg-text {
+  font-size: 14px;
+  color: #374151;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.loading-dots-anim {
+  display: flex;
+}
+
+.ld {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0D9488;
+  line-height: 1;
+  animation: ldBounce 1.4s infinite ease-in-out;
+}
+
+.ld2 { animation-delay: 0.2s; }
+.ld3 { animation-delay: 0.4s; }
+
+@keyframes ldBounce {
+  0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-4px); }
 }
 
 /* 聊天中的图片缩略图 */

@@ -1,5 +1,5 @@
 export type MessageRole = 'ai' | 'user';
-export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan';
+export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan' | 'loading';
 
 export interface ChatOption {
   label: string;
