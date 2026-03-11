@@ -226,6 +226,7 @@
                 />
               </template>
               <template v-if="msg.options && msg.options.length > 0">
+                <text v-if="msg.optionsLabel" class="options-label">{{ msg.optionsLabel }}</text>
                 <OptionButtons :options="msg.options" :selected-value="msg.selectedOption" @select="(opt: any) => handleOptionWithMark(msg, opt)" />
               </template>
               <template v-if="msg.contentType === 'pdf' && msg.pdfFileName">
@@ -1847,6 +1848,14 @@ onShow(() => {
 @keyframes dotPulse {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
+}
+
+/* 选项标签提示 */
+.options-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 /* 加载消息（生成体检方案） */

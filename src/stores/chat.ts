@@ -890,10 +890,16 @@ export const useChatStore = defineStore('chat', () => {
   function appendFollowUpOptions(afterPackage?: boolean) {
     const options = getFollowUpOptions(currentKey.value, aiTurnCount.value, afterPackage);
     if (options && options.length > 0) {
+      // 判断是否为预算选项，添加提示标签
+      const isBudgetOptions = options.some(o => o.value === 'low' || o.value === 'mid' || o.value === 'high'
+        || o.value === 'guided_budget_low' || o.value === 'guided_budget_mid' || o.value === 'guided_budget_high');
+      const label = isBudgetOptions ? '请选择您的体检预算：' : undefined;
+
       // 找到最后一条 AI 消息，将选项附加上去（同一个气泡显示）
       const lastAiMsg = [...messages.value].reverse().find(m => m.role === 'ai' && m.contentType !== 'options');
       if (lastAiMsg) {
         lastAiMsg.options = options;
+        lastAiMsg.optionsLabel = label;
       } else {
         // fallback：没有找到 AI 消息时，单独创建
         addMessage({
@@ -901,6 +907,7 @@ export const useChatStore = defineStore('chat', () => {
           content: '',
           contentType: 'options',
           options,
+          optionsLabel: label,
         });
       }
     }
@@ -1341,16 +1348,21 @@ export const useChatStore = defineStore('chat', () => {
       };
 
       // 无健康数据时，用引导采集的信息作为风险因素
-      const guidedIndicators = profile.concerns && profile.concerns !== '没有特殊情况'
-        ? [profile.concerns]
-        : [];
-      const guidedFocus = profile.focus ? [`关注方向：${profile.focus}`] : [];
+      const hasData = healthIndicators.length > 0;
+      const guidedInfo: string[] = [];
+      if (profile.concerns && profile.concerns !== '没有特殊情况') guidedInfo.push(`健康状况：${profile.concerns}`);
+      if (profile.familyHistory && profile.familyHistory !== '没有') guidedInfo.push(`家族病史：${profile.familyHistory}`);
+      if (profile.jobType) guidedInfo.push(`职业类型：${profile.jobType}`);
+      if (profile.exercise) guidedInfo.push(`运动习惯：${profile.exercise}`);
+      if (profile.sleepQuality) guidedInfo.push(`睡眠质量：${profile.sleepQuality}`);
+      if (profile.habits && profile.habits !== '不吸烟不喝酒') guidedInfo.push(`烟酒习惯：${profile.habits}`);
+      if (profile.focus) guidedInfo.push(`关注方向：${profile.focus}`);
 
       const result = await recommendPackageStream(
         userProfile,
         {
-          indicators: healthIndicators.length > 0 ? healthIndicators : guidedIndicators,
-          riskFactors: riskFactors.length > 0 ? riskFactors : [...guidedIndicators, ...guidedFocus],
+          indicators: hasData ? healthIndicators : guidedInfo,
+          riskFactors: hasData ? riskFactors : guidedInfo,
         },
         budget,
         (chunk: string) => {
@@ -1369,6 +1381,7 @@ export const useChatStore = defineStore('chat', () => {
             contentType: 'loading',
           });
         },
+        { noData: !hasData },
       );
 
       // 流式输出完成，确保 reason 消息内容最终一致

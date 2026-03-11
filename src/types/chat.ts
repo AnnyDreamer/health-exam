@@ -61,6 +61,7 @@ export interface ChatMessage {
   content: string;
   contentType: MessageContentType;
   options?: ChatOption[];
+  optionsLabel?: string;
   selectedOption?: string;
   healthCard?: HealthCardData;
   packageCard?: PackageCardData;
