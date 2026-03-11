@@ -31,10 +31,6 @@
             <text class="group-price-value group-price-value--emp">¥{{ (employeePayment || 0).toLocaleString() }}</text>
           </view>
         </view>
-        <view class="group-info-row">
-          <text class="group-info-tag">企业额度 ¥{{ (enterpriseBudget || 0).toLocaleString() }}</text>
-          <text v-if="aiAddonDiscount" class="group-info-tag group-info-tag--discount">AI加项 {{ Math.round(aiAddonDiscount * 100) / 10 }}折</text>
-        </view>
       </view>
       <view class="btn-row">
         <view class="adj-btn" @tap="$emit('customize')">
@@ -185,27 +181,9 @@ defineEmits(['tap', 'confirm', 'customize']);
 }
 
 .group-price-value--emp {
-  color: #F59E0B;
+  color: #EF4444;
 }
 
-.group-info-row {
-  display: flex;
-  gap: 6px;
-}
-
-.group-info-tag {
-  font-size: 10px;
-  color: #6B7280;
-  background: rgba(107, 114, 128, 0.08);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.group-info-tag--discount {
-  color: #0D9488;
-  background: rgba(13, 148, 136, 0.08);
-}
 
 .btn-row {
   display: flex;

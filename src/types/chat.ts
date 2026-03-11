@@ -1,5 +1,18 @@
 export type MessageRole = 'ai' | 'user';
-export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan' | 'loading';
+export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan' | 'appointment-card' | 'loading';
+
+/** 预约确认卡片数据 */
+export interface AppointmentCardData {
+  appointmentId: string;
+  date: string;
+  time: string;
+  items: string[];
+  location: string;
+  registrationFee: number;
+  isFollowUp?: boolean;
+  /** 每个项目的科室+医生详情 */
+  details?: Array<{ name: string; department: string; doctor: string; feeType: string; registrationFee: number }>;
+}
 
 export interface ChatOption {
   label: string;
@@ -45,6 +58,10 @@ export interface FollowUpItem {
   reason: string;
   suggestedTime: string;
   department: string;
+  type?: 'lifestyle' | 'recheck' | 'outpatient';
+  doctor?: string;
+  registrationFee?: number;
+  feeType?: '普通号' | '专家号' | '特需号';
 }
 
 /** 复查方案 */
@@ -53,6 +70,9 @@ export interface FollowUpPlan {
   urgencyLevel: 'normal' | 'soon' | 'urgent';
   followUpItems: FollowUpItem[];
   generalAdvice: string;
+  dietAdvice?: string;
+  exerciseAdvice?: string;
+  medicalAdvice?: string;
 }
 
 export interface ChatMessage {
@@ -66,9 +86,16 @@ export interface ChatMessage {
   healthCard?: HealthCardData;
   packageCard?: PackageCardData;
   followUpPlan?: FollowUpPlan;
+  appointmentCard?: AppointmentCardData;
   imageUrl?: string;
   /** PDF 文件名（用于 contentType 为 pdf 时展示） */
   pdfFileName?: string;
+  /** 标记此消息为报告解读结果 */
+  isReportInterpretation?: boolean;
+  /** 关联的报告解读记录 ID */
+  reportId?: string;
+  /** 标记报告详情（复查方案）正在生成中 */
+  planGenerating?: boolean;
   timestamp: number;
 }
 

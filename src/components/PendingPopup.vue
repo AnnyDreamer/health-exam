@@ -29,10 +29,6 @@
           </view>
         </view>
         <text class="pkg-info">{{ packageInfo }}</text>
-        <view class="pkg-price-row">
-          <text class="pkg-price">¥{{ price }}</text>
-          <text v-if="originalPrice" class="pkg-orig-price">¥{{ originalPrice }}</text>
-        </view>
       </view>
 
       <!-- 主按钮 -->
@@ -57,8 +53,6 @@ const props = defineProps<{
   packageName: string;
   packageBadge?: string;
   packageInfo: string;
-  price: string;
-  originalPrice?: string;
 }>();
 
 const emit = defineEmits<{
@@ -194,26 +188,6 @@ function handleClose() {
   font-size: 12px;
   color: #6B7280;
   font-family: "Noto Sans SC", sans-serif;
-}
-
-.pkg-price-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pkg-price {
-  font-size: 20px;
-  font-weight: 700;
-  color: #0D9488;
-  font-family: "DM Sans", sans-serif;
-}
-
-.pkg-orig-price {
-  font-size: 13px;
-  color: #9CA3AF;
-  text-decoration: line-through;
-  font-family: "DM Sans", sans-serif;
 }
 
 .primary-btn {

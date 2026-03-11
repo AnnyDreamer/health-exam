@@ -266,8 +266,34 @@
               <template v-if="msg.contentType === 'follow-up-plan' && msg.followUpPlan">
                 <FollowUpCard
                   :plan="msg.followUpPlan"
-                  @book="handleFollowUpBook"
+                  @book="handleFollowUpBook(msg.followUpPlan!)"
                 />
+              </template>
+              <template v-if="msg.contentType === 'appointment-card' && msg.appointmentCard">
+                <AppointmentConfirmCard :data="msg.appointmentCard" />
+              </template>
+              <template v-if="msg.isReportInterpretation && msg.content && msg.reportId">
+                <!-- 有 followUpPlan 时展示查看报告详情按钮 -->
+                <view v-if="msg.followUpPlan" class="report-link-btn" @tap="openReportDrawer(msg)">
+                  <text class="report-link-text">查看报告详情</text>
+                  <ChevronRight :size="14" color="#0D9488" />
+                </view>
+                <!-- plan 正在生成中，展示进度条 -->
+                <view v-else-if="msg.planGenerating" class="report-generating-card">
+                  <view class="generating-header">
+                    <view class="generating-spinner"></view>
+                    <text class="generating-text">正在生成报告详情...</text>
+                  </view>
+                  <view class="generating-progress-track">
+                    <view class="generating-progress-bar"></view>
+                  </view>
+                  <text class="generating-hint">正在分析异常项并生成健康建议</text>
+                </view>
+                <!-- 兜底：plan 生成完毕但失败，或从历史恢复 -->
+                <view v-else class="report-link-btn" @tap="openReportDrawer(msg)">
+                  <text class="report-link-text">查看完整报告</text>
+                  <text class="report-link-arrow">›</text>
+                </view>
               </template>
             </ChatBubble>
           </view>
@@ -325,9 +351,7 @@
       :company-name="userStore.userInfo?.companyName || ''"
       package-name="企业员工标准体检套餐"
       package-badge="团检"
-      package-info="包含 15 项检查 · 企业8折优惠"
-      price="1,264"
-      original-price="1,580"
+      package-info="包含 15 项检查"
       @close="showPending = false"
       @confirm="handlePendingConfirm"
     />
@@ -353,6 +377,22 @@
       :discount="paymentDiscount"
       @close="showPayment = false"
       @confirm="handlePaymentConfirm"
+    />
+
+    <ReportDrawer
+      :visible="showReportDrawer"
+      :report-content="drawerReportContent"
+      :follow-up-plan="drawerFollowUpPlan"
+      @close="showReportDrawer = false"
+      @book="handleReportBook"
+    />
+
+    <FollowUpBookingPopup
+      v-if="pendingFollowUpPlan"
+      :visible="showFollowUpBooking"
+      :follow-up-plan="pendingFollowUpPlan"
+      @close="showFollowUpBooking = false"
+      @confirm="handleFollowUpConfirm"
     />
 
     <!-- 加载数据弹窗 -->
@@ -485,13 +525,18 @@ import PendingPopup from '@/components/PendingPopup.vue';
 import DateTimePicker from '@/components/DateTimePicker.vue';
 import PaymentPopup from '@/components/PaymentPopup.vue';
 import PackageDetailPopup from '@/components/PackageDetailPopup.vue';
+import ReportDrawer from '@/components/ReportDrawer.vue';
+import FollowUpBookingPopup from '@/components/FollowUpBookingPopup.vue';
 import HealthRecordView from '@/components/HealthRecordView.vue';
 import ProfileView from '@/components/ProfileView.vue';
-import type { ChatMessage, ChatOption, PackageCardData } from '@/types/chat';
+import { useReportStore } from '@/stores/report';
+import AppointmentConfirmCard from '@/components/AppointmentConfirmCard.vue';
+import type { ChatMessage, ChatOption, PackageCardData, FollowUpPlan } from '@/types/chat';
 
 const userStore = useUserStore();
 const healthStore = useHealthStore();
 const chatStore = useChatStore();
+const reportStore = useReportStore();
 
 // 页面阶段: idle → loading → ready (授权改为弹窗)
 const pagePhase = ref<'idle' | 'loading' | 'ready'>('idle');
@@ -527,6 +572,14 @@ const paymentDiscount = ref(0.85);
 // 套餐弹窗
 const showPackagePopup = ref(false);
 const popupPackageId = ref('');
+
+// 报告解读抽屉
+const showReportDrawer = ref(false);
+const drawerReportContent = ref('');
+const drawerFollowUpPlan = ref<FollowUpPlan | null>(null);
+
+const showFollowUpBooking = ref(false);
+const pendingFollowUpPlan = ref<FollowUpPlan | null>(null);
 
 // 滚动相关
 const scrollPosition = ref(0);
@@ -683,13 +736,88 @@ async function handleSendPdf(payload: { base64: string; fileName: string }) {
   scrollToBottom();
 }
 
-function handleFollowUpBook() {
-  chatStore.sendUserMessage('预约复查', 'make-package');
-  scrollToBottom();
+function handleFollowUpBook(plan?: FollowUpPlan) {
+  const targetPlan = plan || drawerFollowUpPlan.value;
+  if (targetPlan) {
+    pendingFollowUpPlan.value = targetPlan;
+    showFollowUpBooking.value = true;
+  }
 }
 
 function previewImage(url: string) {
   uni.previewImage({ urls: [url], current: url });
+}
+
+function openReportDrawer(msg: ChatMessage) {
+  const report = msg.reportId ? reportStore.getReportById(msg.reportId) : null;
+  drawerReportContent.value = report?.fullContent || msg.content || '';
+  drawerFollowUpPlan.value = msg.followUpPlan || null;
+  showReportDrawer.value = true;
+}
+
+function handleReportBook() {
+  showReportDrawer.value = false;
+  handleFollowUpBook(drawerFollowUpPlan.value || undefined);
+}
+
+function handleFollowUpConfirm(data: { selectedItems: import('@/types/chat').FollowUpItem[]; date: string; time: string; totalRegistrationFee: number }) {
+  showFollowUpBooking.value = false;
+  const aptStore = useAppointmentStore();
+  const apt = aptStore.createFollowUp(pendingFollowUpPlan.value!, data.selectedItems, data.date, data.time, data.totalRegistrationFee);
+
+  // 在聊天中插入预约成功卡片
+  chatStore.addMessage({
+    role: 'ai',
+    content: '',
+    contentType: 'appointment-card',
+    appointmentCard: {
+      appointmentId: apt.id,
+      date: apt.date,
+      time: apt.time,
+      items: apt.items,
+      location: apt.location,
+      registrationFee: data.totalRegistrationFee,
+      isFollowUp: true,
+      details: apt.followUpDetails?.map((d) => ({
+        name: d.name,
+        department: d.department,
+        doctor: d.doctor,
+        feeType: d.feeType,
+        registrationFee: d.registrationFee,
+      })),
+    },
+  });
+  scrollToBottom();
+}
+
+// 报告总结卡片辅助函数
+function getReportUrgency(plan: FollowUpPlan): string {
+  const level = plan.urgencyLevel || 'normal';
+  if (level === 'normal' && plan.followUpItems.length > 0) {
+    if (plan.followUpItems.some((i) => i.type === 'outpatient')) return 'urgent';
+    if (plan.followUpItems.some((i) => !i.type || i.type === 'recheck')) return 'soon';
+  }
+  return level;
+}
+
+function getReportSummaryDesc(plan: FollowUpPlan): string {
+  const total = plan.followUpItems.length;
+  if (total === 0) return '各项指标基本正常，请继续保持';
+  const out = countByType(plan, 'outpatient');
+  const re = countByType(plan, 'recheck');
+  const life = countByType(plan, 'lifestyle');
+  const parts: string[] = [];
+  if (out > 0) parts.push(`${out}项需就诊`);
+  if (re > 0) parts.push(`${re}项需复查`);
+  if (life > 0) parts.push(`${life}项需关注`);
+  return `共发现 ${total} 项异常，${parts.join('、')}`;
+}
+
+function countByType(plan: FollowUpPlan, type: string): number {
+  if (type === 'recheck') {
+    return plan.followUpItems.filter((i) => !i.type || i.type === 'recheck').length;
+  }
+  return plan.followUpItems.filter((i) => i.type === type).length;
 }
 
 // 流式输出时自动滚动
@@ -1952,6 +2080,238 @@ onShow(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 查看完整报告按钮 */
+.report-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.18);
+
+  &:active { opacity: 0.7; }
+}
+
+.report-link-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.report-link-arrow {
+  font-size: 16px;
+  color: #0D9488;
+  transform: rotate(0deg);
+  line-height: 1;
+}
+
+/* 报告总结概要卡片 */
+.report-summary-card {
+  margin-top: 8px;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.report-summary--normal {
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.18);
+}
+
+.report-summary--soon {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.18);
+}
+
+.report-summary--urgent {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+.summary-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-icon-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summary-icon-ring--normal {
+  background: rgba(13, 148, 136, 0.12);
+  border: 2px solid rgba(13, 148, 136, 0.25);
+}
+
+.summary-icon-ring--soon {
+  background: rgba(245, 158, 11, 0.12);
+  border: 2px solid rgba(245, 158, 11, 0.25);
+}
+
+.summary-icon-ring--urgent {
+  background: rgba(239, 68, 68, 0.12);
+  border: 2px solid rgba(239, 68, 68, 0.25);
+}
+
+.summary-icon-text {
+  font-size: 18px;
+}
+
+.summary-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.summary-status-title {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.summary-status-title--normal { color: #0D9488; }
+.summary-status-title--soon { color: #D97706; }
+.summary-status-title--urgent { color: #DC2626; }
+
+.summary-status-desc {
+  font-size: 12px;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+  line-height: 1.5;
+}
+
+.summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.summary-tag-dot {
+  font-size: 8px;
+  line-height: 1;
+}
+
+.summary-tag-dot--outpatient { color: #EF4444; }
+.summary-tag-dot--recheck { color: #F59E0B; }
+.summary-tag-dot--lifestyle { color: #10B981; }
+
+.summary-tag-text {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.summary-tag-text--outpatient { color: #EF4444; }
+.summary-tag-text--recheck { color: #D97706; }
+.summary-tag-text--lifestyle { color: #059669; }
+
+.summary-detail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-radius: 10px;
+  background: rgba(13, 148, 136, 0.08);
+
+  &:active { opacity: 0.7; }
+}
+
+.summary-detail-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* 报告详情生成中进度卡片 */
+.report-generating-card {
+  margin-top: 8px;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(13, 148, 136, 0.06);
+  border: 1px solid rgba(13, 148, 136, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+.generating-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.generating-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(13, 148, 136, 0.2);
+  border-top-color: #0D9488;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.generating-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.generating-progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(13, 148, 136, 0.12);
+  overflow: hidden;
+}
+
+.generating-progress-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  animation: progressSlide 2s ease-in-out infinite;
+  width: 40%;
+}
+
+@keyframes progressSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.generating-hint {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 /* 回到顶部 */

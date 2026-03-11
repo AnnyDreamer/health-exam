@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { Appointment } from '@/types/appointment';
+import type { FollowUpPlan } from '@/types/chat';
 import {
   getAppointmentList,
   getAppointmentDetail as fetchDetail,
@@ -94,5 +95,60 @@ export const useAppointmentStore = defineStore('appointment', () => {
     _saveAppointments();
   }
 
-  return { appointments, currentAppointment, loading, loadAppointments, loadDetail, create, cancel };
+  /** 根据复查方案创建复查预约 */
+  function createFollowUp(
+    plan: FollowUpPlan,
+    selectedItems?: import('@/types/chat').FollowUpItem[],
+    date?: string,
+    time?: string,
+    totalRegistrationFee?: number,
+  ): Appointment {
+    const sourceItems = selectedItems || plan.followUpItems;
+    // 提取科室（去重）
+    const depts = [...new Set(
+      sourceItems.map((i) => i.department).filter(Boolean),
+    )];
+    // 检查项目列表：名称 + 科室
+    const items = sourceItems.map((i) =>
+      i.department ? `${i.name}（${i.department}）` : i.name,
+    );
+    // 生成注意事项
+    const notice: string[] = [];
+    if (plan.dietAdvice) notice.push(plan.dietAdvice.split('\n')[0]);
+    if (plan.exerciseAdvice) notice.push(plan.exerciseAdvice.split('\n')[0]);
+    if (plan.medicalAdvice) notice.push(plan.medicalAdvice.split('\n')[0]);
+
+    // 结构化详情
+    const followUpDetails = sourceItems.map((i) => ({
+      name: i.name,
+      department: i.department || '',
+      doctor: i.doctor || '',
+      registrationFee: i.registrationFee || 0,
+      feeType: i.feeType || '普通号',
+    }));
+
+    const apt: Appointment = {
+      id: `followup_${Date.now()}`,
+      packageId: 'followup',
+      packageName: '复查预约',
+      date: date || '',
+      time: time || '',
+      location: '健康体检中心 3楼',
+      status: date ? 'confirmed' : 'pending',
+      items,
+      totalPrice: totalRegistrationFee || 0,
+      registrationFee: totalRegistrationFee,
+      createdAt: new Date().toISOString(),
+      notice: notice.length > 0 ? notice : undefined,
+      isFollowUp: true,
+      departments: depts,
+      followUpDetails,
+    };
+    appointments.value.push(apt);
+    currentAppointment.value = apt;
+    _saveAppointments();
+    return apt;
+  }
+
+  return { appointments, currentAppointment, loading, loadAppointments, loadDetail, create, createFollowUp, cancel };
 });

@@ -442,6 +442,14 @@ export const useChatStore = defineStore('chat', () => {
   function restoreHistory(): boolean {
     const history = loadHistory();
     if (history && history.length > 0) {
+      // 清理残留状态（上次可能中途退出）
+      history.forEach((msg) => {
+        if (msg.planGenerating) msg.planGenerating = false;
+        // 清理旧的 book-followup 选项（已迁移到报告抽屉中操作）
+        if (msg.options?.some((o) => o.value === 'book-followup')) {
+          msg.options = undefined;
+        }
+      });
       messages.value = history;
       // 恢复 msgId 计数器，避免 ID 冲突
       const maxId = history.reduce((max, msg) => {
@@ -606,6 +614,14 @@ export const useChatStore = defineStore('chat', () => {
     const msg = messages.value.find((m) => m.id === id);
     if (msg) {
       msg.content = content;
+    }
+  }
+
+  /** 更新指定消息的多个字段（确保响应式触发） */
+  function _updateMessage(id: string, fields: Partial<ChatMessage>) {
+    const idx = messages.value.findIndex((m) => m.id === id);
+    if (idx !== -1) {
+      messages.value[idx] = { ...messages.value[idx], ...fields };
     }
   }
 
@@ -1465,46 +1481,40 @@ export const useChatStore = defineStore('chat', () => {
    * 报告解读完成后，自动生成复查方案
    * @param reportText - 报告解读的完整文本
    */
-  async function handleFollowUpPlanGeneration(reportText: string) {
-    if (!reportText) return;
+  async function handleFollowUpPlanGeneration(reportText: string): Promise<FollowUpPlan | null> {
+    if (!reportText) return null;
 
     isTyping.value = true;
     try {
       const plan: FollowUpPlan = await generateFollowUpPlan(reportText);
       isTyping.value = false;
 
-      // 插入复查方案卡片消息
-      addMessage({
-        role: 'ai',
-        content: '',
-        contentType: 'follow-up-plan',
-        followUpPlan: plan,
-      });
+      // 不再插入单独的复查方案卡片消息，plan 会回写到解读消息上
+      // 由解读消息底部的总结概要卡片展示，点击"查看详情"打开抽屉
 
-      // 复查方案后追加操作选项
       // 保存最近的复查方案，供预约复查时使用
       lastFollowUpPlan.value = plan;
 
-      const options = plan.needFollowUp && plan.followUpItems.length > 0
-        ? [
-            { label: '预约复查', value: 'book-followup', primary: true },
-            { label: '继续咨询', value: 'consult' },
-          ]
-        : [
+      // 无需复查时，提供制定体检方案的选项
+      if (!(plan.needFollowUp && plan.followUpItems.length > 0)) {
+        addMessage({
+          role: 'ai',
+          content: '',
+          contentType: 'options',
+          options: [
             { label: '制定体检方案', value: 'make-package', primary: true },
             { label: '暂时不用', value: 'dismiss' },
-          ];
-      addMessage({
-        role: 'ai',
-        content: '',
-        contentType: 'options',
-        options,
-      });
+          ],
+        });
+      }
+
+      return plan;
     } catch (error: unknown) {
       isTyping.value = false;
       console.error('复查方案生成失败:', error);
       // 复查方案生成失败不影响主流程，仅追加常规后续操作
       appendFollowUpOptions();
+      return null;
     }
   }
 
@@ -1574,6 +1584,7 @@ export const useChatStore = defineStore('chat', () => {
       role: 'ai',
       content: '',
       contentType: 'text',
+      isReportInterpretation: true,
     });
     streamingMessageId.value = aiMsgId;
     isTyping.value = false;
@@ -1601,21 +1612,40 @@ export const useChatStore = defineStore('chat', () => {
       streamingMessageId.value = null;
       _saveChatHistory();
 
-      // 保存报告解读记录
+      // 保存报告解读记录，并将 reportId 关联到消息
       try {
         const reportStore = useReportStore();
-        reportStore.addReport({
+        const record = reportStore.addReport({
           title: '体检报告解读',
           summary: fullText.slice(0, 200),
           fullContent: fullText,
           imageUrl,
         });
+        const msg = messages.value.find((m) => m.id === aiMsgId);
+        if (msg) msg.reportId = record.id;
       } catch (_e) { /* ignore */ }
 
-      // 报告解读完成后，自动生成复查方案
-      await handleFollowUpPlanGeneration(fullText);
+      // 插入过渡提示消息
+      addMessage({
+        role: 'ai',
+        content: '我正在为您深入分析各项指标，生成详细的健康建议和复查方案，请稍等片刻~',
+        contentType: 'text',
+      });
+      _saveChatHistory();
+
+      // 标记开始生成报告详情
+      _updateMessage(aiMsgId, { planGenerating: true });
+
+      // 报告解读完成后，自动生成复查方案，并回写到解读消息
+      const plan = await handleFollowUpPlanGeneration(fullText);
+      _updateMessage(aiMsgId, {
+        planGenerating: false,
+        ...(plan ? { followUpPlan: plan } : {}),
+      });
+      _saveChatHistory();
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : '未知错误';
+      _updateMessage(aiMsgId, { planGenerating: false });
       updateMessageContent(aiMsgId, `报告解读失败，请重试\n\n(错误信息: ${errMsg})`);
       streamingMessageId.value = null;
       _saveChatHistory();
@@ -1639,6 +1669,7 @@ export const useChatStore = defineStore('chat', () => {
       role: 'ai',
       content: '',
       contentType: 'text',
+      isReportInterpretation: true,
     });
     streamingMessageId.value = aiMsgId;
     isTyping.value = false;
@@ -1666,21 +1697,40 @@ export const useChatStore = defineStore('chat', () => {
       streamingMessageId.value = null;
       _saveChatHistory();
 
-      // 保存报告解读记录
+      // 保存报告解读记录，并将 reportId 关联到消息
       try {
         const reportStore = useReportStore();
-        reportStore.addReport({
+        const record = reportStore.addReport({
           title: '体检报告解读',
           summary: fullText.slice(0, 200),
           fullContent: fullText,
           pdfFileName: fileName,
         });
+        const msg = messages.value.find((m) => m.id === aiMsgId);
+        if (msg) msg.reportId = record.id;
       } catch (_e) { /* ignore */ }
 
-      // 报告解读完成后，自动生成复查方案
-      await handleFollowUpPlanGeneration(fullText);
+      // 插入过渡提示消息
+      addMessage({
+        role: 'ai',
+        content: '我正在为您深入分析各项指标，生成详细的健康建议和复查方案，请稍等片刻~',
+        contentType: 'text',
+      });
+      _saveChatHistory();
+
+      // 标记开始生成报告详情
+      _updateMessage(aiMsgId, { planGenerating: true });
+
+      // 报告解读完成后，自动生成复查方案，并回写到解读消息
+      const plan = await handleFollowUpPlanGeneration(fullText);
+      _updateMessage(aiMsgId, {
+        planGenerating: false,
+        ...(plan ? { followUpPlan: plan } : {}),
+      });
+      _saveChatHistory();
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : '未知错误';
+      _updateMessage(aiMsgId, { planGenerating: false });
       updateMessageContent(aiMsgId, `PDF 报告解读失败，请重试\n\n(错误信息: ${errMsg})`);
       streamingMessageId.value = null;
       _saveChatHistory();

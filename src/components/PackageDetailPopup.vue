@@ -26,15 +26,20 @@
 
           <!-- 分类展示 -->
           <template v-if="hasCategoryItems">
-            <view class="section-header">
-              <text class="section-title section-title--standard">常规检查</text>
-              <text class="section-count">{{ selectedStandardCount }}/{{ standardItems.length }}项</text>
+            <view class="section-header section-header--toggle" @tap="standardExpanded = !standardExpanded">
+              <view class="section-title-row">
+                <text class="section-title section-title--standard">常规检查</text>
+                <text class="section-count">{{ standardItems.length }}项</text>
+              </view>
+              <view class="section-arrow" :class="{ 'section-arrow--expanded': standardExpanded }">
+                <ChevronDown :size="16" color="#9CA3AF" />
+              </view>
             </view>
-            <view class="items-list">
-              <view v-for="item in standardItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+            <view class="items-list" v-show="standardExpanded">
+              <view v-for="item in standardItems" :key="item.id" class="check-item">
                 <view class="check-item-top">
-                  <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
-                    <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
+                  <view class="item-checkbox item-checkbox--checked item-checkbox--locked">
+                    <view class="checkbox-tick">✓</view>
                   </view>
                   <text class="item-name">{{ item.name }}</text>
                   <text class="item-price">¥{{ item.price }}</text>
@@ -43,21 +48,26 @@
               </view>
             </view>
 
+            <view class="section-divider"></view>
+
             <!-- AI 个性化加项 -->
-            <view class="ai-addon-section">
-              <view class="section-header">
-                <view class="section-title-row">
-                  <text class="section-title section-title--ai">AI 个性化加项</text>
-                  <view class="ai-tag">
-                    <BrainCircuit :size="11" color="#0D9488" />
-                    <text class="ai-tag-text">AI</text>
-                  </view>
+            <view class="section-header section-header--toggle" @tap="aiExpanded = !aiExpanded">
+              <view class="section-title-row">
+                <text class="section-title section-title--ai">AI 个性化加项</text>
+                <view class="ai-tag">
+                  <BrainCircuit :size="11" color="#0D9488" />
+                  <text class="ai-tag-text">AI</text>
                 </view>
                 <text class="section-count">{{ selectedAiCount }}/{{ aiAddonItems.length }}项</text>
               </view>
-              <text class="ai-addon-hint">根据您的健康数据，AI 为您个性化推荐以下加项</text>
+              <view class="section-arrow" :class="{ 'section-arrow--expanded': aiExpanded }">
+                <ChevronDown :size="16" color="#9CA3AF" />
+              </view>
+            </view>
+            <view v-show="aiExpanded">
+              <text class="ai-addon-hint">根据您的健康状况，建议增补以下检查项目</text>
               <view class="items-list">
-                <view v-for="item in aiAddonItems" :key="item.id" class="check-item check-item--ai" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
+                <view v-for="item in aiAddonItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
                   <view class="check-item-top">
                     <view class="item-checkbox" :class="{ 'item-checkbox--checked': selectedIds.has(item.id) }">
                       <view v-if="selectedIds.has(item.id)" class="checkbox-tick">✓</view>
@@ -121,10 +131,9 @@
                 <text class="group-bottom-value group-bottom-value--emp">¥{{ employeePayment.toLocaleString() }}</text>
               </view>
             </view>
+            <text class="group-bottom-desc">员工自付部分为 AI 根据您的健康状况推荐的个性化加项费用，超出企业预算的差额由员工自行承担</text>
             <view class="group-bottom-tags">
               <text class="group-bottom-tag">已选 {{ selectedCount }} 项</text>
-              <text v-if="aiAddonDiscountedTotal > 0" class="group-bottom-tag group-bottom-tag--discount">AI加项已享{{ Math.round((pkg.aiAddonDiscount || 0.85) * 100) / 10 }}折</text>
-              <text v-if="aiAddonDiscountedTotal > 0" class="group-bottom-tag">折后 ¥{{ aiAddonDiscountedTotal.toLocaleString() }}</text>
             </view>
           </view>
         </template>
@@ -154,7 +163,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Info, CalendarCheck, Sparkles, BrainCircuit } from 'lucide-vue-next';
+import { Info, CalendarCheck, Sparkles, BrainCircuit, ChevronDown } from 'lucide-vue-next';
 import { usePackageStore } from '@/stores/package';
 
 const props = defineProps<{
@@ -177,6 +186,8 @@ const scrollHeight = computed(() => {
 
 const pkg = computed(() => packageStore.currentPackage);
 const selectedIds = ref<Set<string>>(new Set());
+const standardExpanded = ref(false);
+const aiExpanded = ref(true);
 
 // 加载套餐数据
 watch(() => props.packageId, async (id) => {
@@ -419,6 +430,23 @@ function handleConfirm() {
   gap: 6px;
 }
 
+.section-divider {
+  border-top: 1px dashed #D1D5DB;
+  margin: 4px 0;
+}
+
+.section-header--toggle {
+  cursor: pointer;
+}
+
+.section-arrow {
+  transition: transform 0.2s ease;
+}
+
+.section-arrow--expanded {
+  transform: rotate(180deg);
+}
+
 .section-count {
   font-size: 12px;
   color: #9CA3AF;
@@ -448,7 +476,6 @@ function handleConfirm() {
   flex-direction: column;
   gap: 10px;
   background: rgba(240, 253, 250, 0.85);
-  border: 1px solid rgba(13, 148, 136, 0.18);
   border-radius: 16px;
   padding: 14px;
 }
@@ -458,19 +485,18 @@ function handleConfirm() {
   color: #6B7280;
   font-family: "Noto Sans SC", sans-serif;
   line-height: 1.5;
+  margin-bottom: 14px;
 }
 
 .check-item--ai {
-  background: rgba(255, 255, 255, 0.33);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.65);
 }
 
 .ai-reason {
   margin-top: 2px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: rgba(13, 148, 136, 0.08);
-  border-left: 2px solid rgba(13, 148, 136, 0.4);
+  background: rgba(239, 68, 68, 0.06);
   width: 100%;
   box-sizing: border-box;
 }
@@ -480,6 +506,12 @@ function handleConfirm() {
   color: #4B5563;
   line-height: 1.6;
   font-family: "Noto Sans SC", sans-serif;
+
+  &::before {
+    content: "建议增补：";
+    color: #EF4444;
+    font-weight: 600;
+  }
 }
 
 /* ---- 检查项目 ---- */
@@ -495,8 +527,7 @@ function handleConfirm() {
   gap: 4px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.33);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(8px);
 }
 
@@ -521,6 +552,10 @@ function handleConfirm() {
 .item-checkbox--checked {
   background: #0D9488;
   border-color: #0D9488;
+}
+
+.item-checkbox--locked {
+  opacity: 0.6;
 }
 
 .checkbox-tick {
@@ -710,7 +745,7 @@ function handleConfirm() {
 }
 
 .group-bottom-value--emp {
-  color: #F59E0B;
+  color: #EF4444;
 }
 
 .group-bottom-plus {
@@ -719,6 +754,14 @@ function handleConfirm() {
   color: #9CA3AF;
   font-family: "DM Sans", sans-serif;
   margin-top: 10px;
+}
+
+.group-bottom-desc {
+  font-size: 11px;
+  color: #9CA3AF;
+  line-height: 1.5;
+  text-align: center;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .group-bottom-tags {
