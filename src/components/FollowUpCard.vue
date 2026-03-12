@@ -91,36 +91,73 @@
 
       <!-- 复查就医 -->
       <view v-if="activeTab === 'medical'" class="advice-panel">
-        <view v-if="parsedMedical.length > 0" class="advice-card advice-card--medical">
-          <view class="advice-card-header advice-card-header--medical">
-            <text class="advice-card-title advice-card-title--medical">复查就诊建议（{{ parsedMedical.length }}）</text>
+        <!-- 门诊/体检 子 tab -->
+        <view class="fu-sub-tabs">
+          <view class="fu-sub-tab" :class="{ 'fu-sub-tab--active': medSubTab === 'outpatient' }" @tap="medSubTab = 'outpatient'">
+            <text class="fu-sub-tab-text" :class="{ 'fu-sub-tab-text--active': medSubTab === 'outpatient' }">门诊就医（{{ outpatientItems.length }}）</text>
           </view>
-          <view class="advice-card-body">
-            <view v-for="(line, i) in parsedMedical" :key="'m-' + i" class="advice-line">
-              <view class="advice-bullet advice-bullet--medical"></view>
-              <text class="advice-line-text">
-                <text v-if="line.highlight" class="advice-highlight">{{ line.highlight }}</text>
-                <text v-if="line.highlight && line.detail"> — </text>
-                <text class="advice-detail">{{ line.detail }}</text>
-              </text>
-            </view>
+          <view class="fu-sub-tab" :class="{ 'fu-sub-tab--active': medSubTab === 'recheck' }" @tap="medSubTab = 'recheck'">
+            <text class="fu-sub-tab-text" :class="{ 'fu-sub-tab-text--active': medSubTab === 'recheck' }">体检复查（{{ recheckOnlyItems.length }}）</text>
           </view>
         </view>
-        <!-- 复查项目列表 -->
-        <view v-if="plan.followUpItems.length > 0" class="followup-items">
-          <view v-for="(item, index) in plan.followUpItems" :key="'fi-' + index" class="followup-item">
-            <view class="item-header">
-              <view class="item-index">{{ index + 1 }}</view>
-              <text class="item-name">{{ item.name }}</text>
+
+        <!-- 门诊就医 -->
+        <template v-if="medSubTab === 'outpatient'">
+          <view v-if="outpatientItems.length === 0" class="no-followup">
+            <text class="no-followup-text">暂无门诊就医建议</text>
+          </view>
+          <view v-for="(group, dept) in outpatientGrouped" :key="'op-' + dept" class="followup-dept-group">
+            <view class="followup-dept-header">
+              <view class="followup-dept-dot"></view>
+              <text class="followup-dept-name">{{ dept }}</text>
+              <text class="followup-dept-count">{{ group.length }}项</text>
+            </view>
+            <view class="followup-items">
+              <view v-for="(item, idx) in group" :key="'op-' + idx" class="followup-item">
+                <view class="item-header">
+                  <view class="item-index item-index--outpatient">{{ idx + 1 }}</view>
+                  <text class="item-name">{{ item.name }}</text>
+                  <text v-if="item.feeType" class="item-fee-tag">{{ item.feeType }} ¥{{ item.registrationFee || 50 }}</text>
+                </view>
+                <view class="item-time-row">
+                  <text class="item-time-label">建议就诊时间</text>
+                  <text class="item-time-value">{{ item.suggestedTime }}</text>
+                </view>
+                <view v-if="item.doctor" class="item-doctor-row">
+                  <text class="item-doctor">{{ item.doctor }}</text>
+                </view>
+                <view class="item-ai-reason">
+                  <text class="item-ai-reason-label">AI推荐：</text>
+                  <text class="item-ai-reason-text">{{ item.reason }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </template>
+
+        <!-- 体检复查 -->
+        <template v-if="medSubTab === 'recheck'">
+          <view v-if="recheckOnlyItems.length === 0" class="no-followup">
+            <text class="no-followup-text">暂无体检复查建议</text>
+          </view>
+          <view class="followup-items">
+            <view v-for="(item, idx) in recheckOnlyItems" :key="'rc-' + idx" class="followup-item followup-item--recheck">
+              <view class="item-header">
+                <view class="item-index">{{ idx + 1 }}</view>
+                <text class="item-name">{{ item.name }}</text>
+              </view>
               <text v-if="item.department" class="item-dept">{{ item.department }}</text>
-            </view>
-            <text class="item-reason">{{ item.reason }}</text>
-            <view class="item-time-row">
-              <text class="item-time-label">建议时间</text>
-              <text class="item-time-value">{{ item.suggestedTime }}</text>
+              <view class="item-time-row">
+                <text class="item-time-label">建议时间</text>
+                <text class="item-time-value">{{ item.suggestedTime }}</text>
+              </view>
+              <view class="item-ai-reason">
+                <text class="item-ai-reason-label">AI推荐：</text>
+                <text class="item-ai-reason-text">{{ item.reason }}</text>
+              </view>
             </view>
           </view>
-        </view>
+        </template>
       </view>
 
       <!-- 降级：仅 generalAdvice -->
@@ -149,9 +186,9 @@
     </view>
 
     <!-- 操作按钮 -->
-    <view v-if="plan.needFollowUp && plan.followUpItems.length > 0" class="followup-actions">
+    <view v-if="activeTab === 'medical' && plan.needFollowUp && plan.followUpItems.length > 0" class="followup-actions">
       <view class="book-btn" @tap.stop="$emit('book')">
-        <text class="book-btn-text">预约复查</text>
+        <text class="book-btn-text">{{ medSubTab === 'outpatient' ? '预约挂号' : '预约体检' }}</text>
       </view>
     </view>
   </view>
@@ -173,6 +210,33 @@ interface TabItem {
   key: string;
   label: string;
 }
+
+/** 门诊/体检 子 tab */
+const medSubTab = ref<'outpatient' | 'recheck'>('outpatient');
+
+const outpatientItems = computed(() =>
+  props.plan.followUpItems.filter(i => i.type === 'outpatient'),
+);
+const recheckOnlyItems = computed(() =>
+  props.plan.followUpItems.filter(i => i.type !== 'outpatient'),
+);
+const outpatientGrouped = computed(() => {
+  const map: Record<string, typeof props.plan.followUpItems> = {};
+  for (const item of outpatientItems.value) {
+    const dept = item.department || '其他';
+    if (!map[dept]) map[dept] = [];
+    map[dept].push(item);
+  }
+  return map;
+});
+
+// 默认选中有数据的子 tab
+watch(() => props.plan.followUpItems, () => {
+  const hasOut = outpatientItems.value.length > 0;
+  const hasRe = recheckOnlyItems.value.length > 0;
+  if (!hasOut && hasRe) medSubTab.value = 'recheck';
+  else medSubTab.value = 'outpatient';
+}, { immediate: true });
 
 const urgencyClass = computed(() => `urgency-${props.plan.urgencyLevel}`);
 
@@ -709,6 +773,136 @@ watch(tabs, (val) => {
 .no-followup-text {
   font-size: 13px;
   color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* 门诊/体检 二级 Tab（下划线风格） */
+.fu-sub-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.6);
+  margin-bottom: 12px;
+}
+
+.fu-sub-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 10px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.fu-sub-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: #0D9488;
+  border-radius: 1px;
+}
+
+.fu-sub-tab-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+  transition: color 0.2s;
+}
+
+.fu-sub-tab-text--active {
+  color: #0D9488;
+  font-weight: 700;
+}
+
+/* 门诊科室分组 */
+.followup-dept-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.followup-dept-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.followup-dept-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: #0D9488;
+  flex-shrink: 0;
+}
+
+.followup-dept-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.followup-dept-count {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.item-index--outpatient {
+  background: #EF4444;
+}
+
+.item-fee-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3B82F6;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.item-doctor-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 30px;
+}
+
+.item-doctor {
+  font-size: 12px;
+  color: #0D9488;
+  font-weight: 500;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.followup-item--recheck {
+  border-left: 3px solid rgba(13, 148, 136, 0.3);
+}
+
+/* AI 推荐理由 */
+.item-ai-reason {
+  background: rgba(13, 148, 136, 0.06);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.item-ai-reason-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.item-ai-reason-text {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.7;
   font-family: "Noto Sans SC", sans-serif;
 }
 

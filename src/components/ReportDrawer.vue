@@ -198,37 +198,93 @@
 
           <!-- ====== Tab 3: 复查建议 ====== -->
           <template v-if="activeTab === 'followup'">
-            <view v-for="(group, dept) in followUpGrouped" :key="dept" class="fu-dept-group">
-              <view class="fu-dept-header">
-                <view class="fu-dept-dot"></view>
-                <text class="fu-dept-name">{{ dept }}</text>
-                <text class="fu-dept-count">{{ group.length }}项</text>
+            <!-- 门诊/体检 子 tab -->
+            <view class="fu-sub-tabs">
+              <view
+                class="fu-sub-tab"
+                :class="{ 'fu-sub-tab--active': fuSubTab === 'outpatient' }"
+                @tap="fuSubTab = 'outpatient'"
+              >
+                <text class="fu-sub-tab-text" :class="{ 'fu-sub-tab-text--active': fuSubTab === 'outpatient' }">门诊就医（{{ outpatientItems.length }}）</text>
               </view>
-              <view class="fu-dept-items">
-                <view v-for="(item, idx) in group" :key="'fu-' + idx" class="fu-item">
-                  <view class="fu-item-top">
-                    <text class="fu-item-name">{{ item.name }}</text>
-                    <view v-if="item.registrationFee" class="fu-fee-tag" :class="fuFeeTagClass(item.feeType)">
-                      <text class="fu-fee-tag-text" :class="fuFeeTagTextClass(item.feeType)">{{ item.feeType || '普通号' }} ¥{{ item.registrationFee }}</text>
+              <view
+                class="fu-sub-tab"
+                :class="{ 'fu-sub-tab--active': fuSubTab === 'recheck' }"
+                @tap="fuSubTab = 'recheck'"
+              >
+                <text class="fu-sub-tab-text" :class="{ 'fu-sub-tab-text--active': fuSubTab === 'recheck' }">体检复查（{{ recheckItems.length }}）</text>
+              </view>
+            </view>
+
+            <!-- 门诊就医：按科室分组，含医生和挂号费 -->
+            <template v-if="fuSubTab === 'outpatient'">
+              <view v-if="outpatientItems.length === 0" class="fu-empty">
+                <text class="fu-empty-text">暂无门诊就医建议</text>
+              </view>
+              <view v-for="(group, dept) in outpatientGrouped" :key="'op-' + dept" class="fu-dept-group">
+                <view class="fu-dept-header">
+                  <view class="fu-dept-dot"></view>
+                  <text class="fu-dept-name">{{ dept }}</text>
+                  <text class="fu-dept-count">{{ group.length }}项</text>
+                </view>
+                <view class="fu-dept-items">
+                  <view v-for="(item, idx) in group" :key="'op-' + idx" class="fu-item">
+                    <view class="fu-item-top">
+                      <text class="fu-item-name">{{ item.name }}</text>
+                      <view v-if="item.registrationFee" class="fu-fee-tag" :class="fuFeeTagClass(item.feeType)">
+                        <text class="fu-fee-tag-text" :class="fuFeeTagTextClass(item.feeType)">{{ item.feeType || '专家号' }} ¥{{ item.registrationFee }}</text>
+                      </view>
+                      <view class="fu-time-tag">
+                        <text class="fu-time-tag-text">{{ item.suggestedTime }}</text>
+                      </view>
                     </view>
-                    <view class="fu-time-tag">
-                      <text class="fu-time-tag-text">{{ item.suggestedTime }}</text>
+                    <view v-if="item.doctor" class="fu-doctor-row">
+                      <UserRound :size="12" color="#0D9488" />
+                      <text class="fu-doctor">{{ item.doctor }}</text>
                     </view>
-                  </view>
-                  <view v-if="item.doctor" class="fu-doctor-row">
-                    <UserRound :size="12" color="#0D9488" />
-                    <text class="fu-doctor">{{ item.doctor }}</text>
-                  </view>
-                  <view class="fu-reason-toggle" @tap="toggleExpand('fu-' + dept + '-' + idx)">
-                    <text class="fu-reason-toggle-text">{{ expandedMap['fu-' + dept + '-' + idx] ? '收起原因' : '查看原因' }}</text>
-                    <ChevronDown :size="12" color="#9CA3AF" :class="{ 'fu-arrow-expanded': expandedMap['fu-' + dept + '-' + idx] }" />
-                  </view>
-                  <view v-if="expandedMap['fu-' + dept + '-' + idx]" class="fu-reason-wrap">
-                    <text class="fu-reason">{{ item.reason }}</text>
+                    <view class="fu-reason-toggle" @tap="toggleExpand('op-' + dept + '-' + idx)">
+                      <text class="fu-reason-toggle-text">{{ expandedMap['op-' + dept + '-' + idx] ? '收起原因' : '查看原因' }}</text>
+                      <ChevronDown :size="12" color="#9CA3AF" :class="{ 'fu-arrow-expanded': expandedMap['op-' + dept + '-' + idx] }" />
+                    </view>
+                    <view v-if="expandedMap['op-' + dept + '-' + idx]" class="fu-reason-wrap">
+                      <view class="fu-ai-reason">
+                        <text class="fu-ai-reason-label">AI推荐：</text>
+                        <text class="fu-ai-reason-text">{{ item.reason }}</text>
+                      </view>
+                    </view>
                   </view>
                 </view>
               </view>
-            </view>
+            </template>
+
+            <!-- 体检复查：检查项目列表 -->
+            <template v-if="fuSubTab === 'recheck'">
+              <view v-if="recheckItems.length === 0" class="fu-empty">
+                <text class="fu-empty-text">暂无体检复查建议</text>
+              </view>
+              <view v-for="(item, idx) in recheckItems" :key="'rc-' + idx" class="fu-item fu-item--recheck">
+                <view class="fu-item-top">
+                  <view class="fu-recheck-index">
+                    <text class="fu-recheck-index-text">{{ idx + 1 }}</text>
+                  </view>
+                  <text class="fu-item-name">{{ item.name }}</text>
+                  <view class="fu-time-tag">
+                    <text class="fu-time-tag-text">{{ item.suggestedTime }}</text>
+                  </view>
+                </view>
+                <text v-if="item.department" class="fu-recheck-dept">{{ item.department }}</text>
+                <view class="fu-reason-toggle" @tap="toggleExpand('rc-' + idx)">
+                  <text class="fu-reason-toggle-text">{{ expandedMap['rc-' + idx] ? '收起原因' : '查看原因' }}</text>
+                  <ChevronDown :size="12" color="#9CA3AF" :class="{ 'fu-arrow-expanded': expandedMap['rc-' + idx] }" />
+                </view>
+                <view v-if="expandedMap['rc-' + idx]" class="fu-reason-wrap">
+                  <view class="fu-ai-reason">
+                    <text class="fu-ai-reason-label">AI推荐：</text>
+                    <text class="fu-ai-reason-text">{{ item.reason }}</text>
+                  </view>
+                </view>
+              </view>
+            </template>
           </template>
 
         </view>
@@ -241,7 +297,7 @@
       <view v-if="showBookBtn" class="bottom-bar" @touchmove.prevent>
         <view class="book-btn" @tap="$emit('book')">
           <CalendarCheck :size="18" color="#fff" />
-          <text class="book-btn-text">预约复查</text>
+          <text class="book-btn-text">{{ bookBtnText }}</text>
         </view>
       </view>
     </view>
@@ -367,16 +423,6 @@ const urgencyIcon = computed(() => {
   return map[urgencyLevel.value] || '✓';
 });
 
-// 异常项分组
-const outpatientItems = computed(() =>
-  props.followUpPlan?.followUpItems.filter((item) => item.type === 'outpatient') || [],
-);
-const recheckItems = computed(() =>
-  props.followUpPlan?.followUpItems.filter((item) => !item.type || item.type === 'recheck') || [],
-);
-const lifestyleItems = computed(() =>
-  props.followUpPlan?.followUpItems.filter((item) => item.type === 'lifestyle') || [],
-);
 const hasFollowUpItems = computed(() =>
   (props.followUpPlan?.followUpItems.length || 0) > 0,
 );
@@ -414,7 +460,11 @@ function parseAdviceLines(text: string): Array<{ highlight: string; detail: stri
 
 // 底部按钮
 const showBookBtn = computed(() =>
-  !!(props.followUpPlan?.needFollowUp && (props.followUpPlan?.followUpItems.length || 0) > 0),
+  activeTab.value === 'followup' && !!(props.followUpPlan?.needFollowUp && (props.followUpPlan?.followUpItems.length || 0) > 0),
+);
+
+const bookBtnText = computed(() =>
+  fuSubTab.value === 'outpatient' ? '预约挂号' : '预约体检',
 );
 
 // ====== 复查建议 Tab ======
@@ -463,16 +513,42 @@ const normalizedFollowUpItems = computed<FollowUpItem[]>(() => {
     });
 });
 
-/** 按科室分组 */
-const followUpGrouped = computed(() => {
+/** 门诊 / 体检复查 子 tab */
+const fuSubTab = ref<'outpatient' | 'recheck'>('outpatient');
+
+/** 门诊就医项 */
+const outpatientItems = computed(() =>
+  normalizedFollowUpItems.value.filter(i => i.type === 'outpatient'),
+);
+
+/** 体检复查项 */
+const recheckItems = computed(() =>
+  normalizedFollowUpItems.value.filter(i => i.type === 'recheck' || !i.type),
+);
+
+/** 需关注（生活方式调整） — 异常项分析 tab 用 */
+const lifestyleItems = computed(() =>
+  (props.followUpPlan?.followUpItems || []).filter(i => i.type === 'lifestyle'),
+);
+
+/** 门诊项按科室分组 */
+const outpatientGrouped = computed(() => {
   const map: Record<string, FollowUpItem[]> = {};
-  for (const item of normalizedFollowUpItems.value) {
+  for (const item of outpatientItems.value) {
     const dept = item.department || '其他';
     if (!map[dept]) map[dept] = [];
     map[dept].push(item);
   }
   return map;
 });
+
+// 默认选中有数据的子 tab
+watch(normalizedFollowUpItems, (items) => {
+  const hasOutpatient = items.some(i => i.type === 'outpatient');
+  const hasRecheck = items.some(i => i.type !== 'outpatient');
+  if (!hasOutpatient && hasRecheck) fuSubTab.value = 'recheck';
+  else fuSubTab.value = 'outpatient';
+}, { immediate: true });
 
 function fuFeeTagClass(feeType?: string): string {
   if (feeType === '专家号') return 'fu-fee-tag--expert';
@@ -1005,6 +1081,93 @@ function fuFeeTagTextClass(feeType?: string): string {
 }
 
 /* ====== 复查建议 Tab ====== */
+
+/* 门诊/体检 子 Tab */
+.fu-sub-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.6);
+  margin-bottom: 12px;
+}
+
+.fu-sub-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 10px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.fu-sub-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: #0D9488;
+  border-radius: 1px;
+}
+
+.fu-sub-tab-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+  transition: color 0.2s;
+}
+
+.fu-sub-tab-text--active {
+  color: #0D9488;
+  font-weight: 700;
+}
+
+.fu-empty {
+  padding: 20px 0;
+  text-align: center;
+}
+
+.fu-empty-text {
+  font-size: 13px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* 体检复查序号 */
+.fu-recheck-index {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #0D9488;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fu-recheck-index-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-family: "DM Sans", sans-serif;
+}
+
+.fu-item--recheck {
+  border-left: 3px solid rgba(13, 148, 136, 0.3);
+}
+
+.fu-recheck-dept {
+  font-size: 11px;
+  color: #0D9488;
+  background: rgba(13, 148, 136, 0.06);
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+  font-family: "Noto Sans SC", sans-serif;
+  font-weight: 500;
+}
+
 .fu-dept-group {
   display: flex;
   flex-direction: column;
@@ -1148,9 +1311,23 @@ function fuFeeTagTextClass(feeType?: string): string {
   padding: 0;
 }
 
-.fu-reason {
+.fu-ai-reason {
+  background: rgba(13, 148, 136, 0.06);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.fu-ai-reason-label {
   font-size: 12px;
-  color: #6B7280;
+  font-weight: 700;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-ai-reason-text {
+  font-size: 12px;
+  color: #374151;
   line-height: 1.7;
   font-family: "Noto Sans SC", sans-serif;
 }

@@ -132,16 +132,12 @@
               </view>
             </view>
             <text class="group-bottom-desc">员工自付部分为 AI 根据您的健康状况推荐的个性化加项费用，超出企业预算的差额由员工自行承担</text>
-            <view class="group-bottom-tags">
-              <text class="group-bottom-tag">已选 {{ selectedCount }} 项</text>
-            </view>
           </view>
         </template>
         <!-- 普通费用展示 -->
         <template v-else>
           <view class="price-section">
             <view class="price-label-area">
-              <text class="price-label">已选 {{ selectedCount }} 项</text>
               <view class="orig-price-row" v-if="pkg.originalPrice">
                 <text class="orig-price">原价 ¥{{ pkg.originalPrice.toLocaleString() }}</text>
               </view>
@@ -154,7 +150,7 @@
         </template>
         <view class="confirm-btn" @tap="handleConfirm">
           <CalendarCheck :size="18" color="#fff" />
-          <text class="confirm-text">立即预约</text>
+          <text class="confirm-text">立即预约（已选 {{ selectedCount }} 项）</text>
         </view>
       </view>
     </view>
@@ -421,7 +417,7 @@ function handleConfirm() {
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.section-title--standard { color: #6B7280; }
+.section-title--standard { color: #0D9488; }
 .section-title--ai { color: #0D9488; }
 
 .section-title-row {

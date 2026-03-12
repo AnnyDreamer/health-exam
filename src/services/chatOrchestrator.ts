@@ -94,18 +94,10 @@ const GUIDED_SYSTEM_PROMPT = `你是一位专业的健康体检顾问AI助手。
 每次只问一个问题，保持简短友好，50字以内。不要列举选项，系统自动展示按钮。不使用表格和 emoji。`;
 
 /** 有数据用户分析系统提示词 */
-const WITH_DATA_SYSTEM_PROMPT = `你是一位专业的健康体检顾问AI助手。用户的健康数据已在对话中提供。
-根据用户的健康记录和异常指标，简要说明存在的主要健康风险（2-3句话），然后说"我可以根据这些风险为您定制针对性的体检方案"，最后问用户体检预算偏好。
-回复简洁，使用 markdown，不使用表格和 emoji。不要让用户提供任何数据。不要直接推荐套餐。`;
-
-/** 风险分析：输出简短引导语 + 调用 tool */
+/** 风险分析：直接调用 tool，不输出文本（文本由前置打字机消息处理） */
 const RISK_TOOL_PROMPT = `你是三甲医院健康管理中心的主任医师，有20年临床经验。
 
-第一步：先输出一句简短的个性化引导语，格式严格为：
-"您好，[用户姓名]，结合您的就诊记录，我为您分析了健康风险，发现**XX、XX**等方面需要关注，并为您制定了相应的健康管理方案。"
-只提风险类别名称（如血脂、血压），不列具体数值，不要输出方案的具体内容。
-
-第二步：调用 render_health_analysis 工具生成结构化方案。
+直接调用 render_health_analysis 工具生成结构化健康风险分析方案，不要输出任何普通文本。
 
 工具参数填写要求：
 - summary：2-3句话概括主要健康风险，用通俗语言
@@ -173,6 +165,18 @@ export class ChatOrchestrator {
     const userStore = useUserStore();
     this.context.isGroupUser = userStore.userInfo?.hasGroupPackage || false;
 
+    // 所有入口先展示用户消息
+    const userLabels: Record<string, string> = {
+      'view-risk': '帮我了解一下我的健康风险',
+      'make-package': '帮我制定体检套餐',
+      'report-interpret': '我想解读体检报告',
+      'exam-process': '了解一下体检流程',
+      'consult': '我想预约咨询',
+    };
+    if (userLabels[key]) {
+      this.store.addMessage({ role: 'user', content: userLabels[key], contentType: 'text' });
+    }
+
     if (key === 'make-package') {
       if (hasHealthData) {
         this.context.currentFlow = 'package';
@@ -221,18 +225,19 @@ export class ChatOrchestrator {
     }
 
     if (value === 'make-package') {
+      this.store.addMessage({ role: 'user', content, contentType: 'text' });
       const healthStore = useHealthStore();
       if (!healthStore.hasData) {
         this.context.currentFlow = 'guided';
         this.context.guidedStep = 1;
         this.context.guidedProfile = {};
-        this.store.addMessage({ role: 'user', content, contentType: 'text' });
         await this._startGuidedFlow();
-        return;
       } else {
         this.context.currentFlow = 'package';
         this.context.hasHealthData = true;
+        await this._startWithDataPackageFlow();
       }
+      return;
     }
 
     // 3. 引导流程中处理用户选择
@@ -473,47 +478,60 @@ export class ChatOrchestrator {
     this.aiTurnCount++;
   }
 
-  /** 启动有数据用户套餐推荐流程 */
+  /** 启动有数据用户套餐推荐流程：确认 → 分析风险 → 问预算 */
   private async _startWithDataPackageFlow() {
     const name = this.context.userName;
     const healthInfo = this._formatHealthDataForAI();
-    const initialPrompt = `我叫${name}，我想定制体检方案。以下是我的全部健康数据：\n${healthInfo}\n\n请分析我的异常指标并说明风险，然后问我预算。`;
+    const initialPrompt = `我叫${name}，我想定制体检方案。以下是我的全部健康数据：\n${healthInfo}`;
     this.conversationHistory = [{ role: 'user', content: initialPrompt }];
 
-    // 有数据用户：先让 AI 分析健康数据（不带 tool），之后追加预算选项
-    await this._sendAIStream(this.conversationHistory, WITH_DATA_SYSTEM_PROMPT);
+    // 第1步：本地打字机确认（不经过 AI，确保不会提前分析数据）
+    await this._typewriterMessage(`好的，${name}，我将根据您的健康记录和关联风险，为您制定针对性的体检套餐方案。`);
+
+    // 第2步：分析风险（打字机输出，结构化列表）
+    const riskPrompt = `你是一位专业的健康体检顾问AI助手。用户的健康数据已在对话中提供。
+
+请用简短的列表分析主要健康风险，严格按以下格式输出，2-4项：
+
+• **异常指标关键词** → 一句话风险说明（不超过20字）
+
+示例：
+• **血压偏高 + 血脂异常** → 需强化心血管风险评估
+• **TSH升高** → 需完善甲状腺功能及抗体检查
+
+最后另起一行总结："我将根据以上风险为您定制针对性的体检方案。"
+
+要求：
+- 每项只写一行，用 **加粗** 标记关键指标名称
+- 不要写具体数值和单位
+- 不使用表格、emoji、编号
+- 不要让用户提供数据，不要直接推荐套餐`;
+    await this._sendAIStream(this.conversationHistory, riskPrompt);
     this.aiTurnCount++;
 
-    // 追加预算选项
-    const hasPackageCard = this.store.messages.some(m => m.contentType === 'package-card');
-    if (!hasPackageCard) {
-      const lastAiMsg = [...this.store.messages].reverse().find(m => m.role === 'ai' && m.contentType !== 'options');
-      if (lastAiMsg) {
-        lastAiMsg.options = [
-          { label: '1000以下 · 基础筛查', value: 'low' },
-          { label: '1000-2000 · 重点专项', value: 'mid', primary: true },
-          { label: '2000以上 · 深度全面', value: 'high' },
-        ];
-        lastAiMsg.optionsLabel = '请选择您的体检预算：';
-      }
+    // 第3步：追加预算选项
+    const lastAiMsg = [...this.store.messages].reverse().find(m => m.role === 'ai' && m.contentType !== 'options');
+    if (lastAiMsg) {
+      lastAiMsg.options = [
+        { label: '1000以下 · 基础筛查', value: 'low' },
+        { label: '1000-2000 · 重点专项', value: 'mid', primary: true },
+        { label: '2000以上 · 深度全面', value: 'high' },
+      ];
+      lastAiMsg.optionsLabel = '请选择您的体检预算：';
     }
   }
 
-  /** 启动风险分析流程：加载卡片 → tool call → 风险摘要卡片 */
+  /** 启动风险分析流程：打字机回应 → 加载卡片 → tool call → 风险摘要卡片 */
   private async _startRiskAnalysis() {
     this.context.currentFlow = 'risk';
-    this.store.setTyping(false); // 确保 typing dots 不显示
+    this.store.setTyping(false);
     const name = this.context.userName;
     const healthInfo = this._formatHealthDataForAI();
     const initialPrompt = `我叫${name}，请帮我分析最近的体检报告中的健康风险。\n${healthInfo}`;
     this.conversationHistory = [{ role: 'user', content: initialPrompt }];
 
-    // 固定问候语（不依赖 AI 输出）
-    this.store.addMessage({
-      role: 'ai',
-      content: `您好，${name}，结合您的就诊记录，我为您分析了健康风险，并针对健康风险，为您制定了相关方案。`,
-      contentType: 'text',
-    });
+    // 本地打字机确认（不经过 AI，确保不会提前分析数据）
+    await this._typewriterMessage(`收到，${name}，我将检索您的就诊记录和体检报告，为您生成健康风险分析报告。`);
 
     // 显示风险分析加载卡片（带进度动画）
     const loadingMsgId = this.store.addMessage({
@@ -532,14 +550,14 @@ export class ChatOrchestrator {
     // 更新卡片：loading → 真实数据
     if (this.lastFollowUpPlan) {
       const plan = this.lastFollowUpPlan;
+      const riskCount = plan.riskItems?.length || 0;
       const parts: string[] = [];
       if (plan.dietAdvice) parts.push('饮食调整');
       if (plan.exerciseAdvice) parts.push('运动指导');
       if (plan.followUpItems?.length) parts.push(`${plan.followUpItems.length}项复查建议`);
       if (plan.medicalAdvice) parts.push('就医指导');
-      const cardDesc = parts.length > 0
-        ? `包含${parts.join('、')}。`
-        : '';
+      const detailParts = parts.length > 0 ? `，包含${parts.join('、')}` : '';
+      const cardDesc = `已为您生成健康风险报告，共发现${riskCount}项风险${detailParts}，点击查看详情。`;
       this.store.updateMessage(loadingMsgId, {
         content: cardDesc,
         contentType: 'risk-summary',
@@ -708,7 +726,9 @@ export class ChatOrchestrator {
         // 普通文本回复
         this.store.setTyping(false);
         if (textContent) {
-          this.store.addMessage({ role: 'ai', content: textContent, contentType: 'text' });
+          if (!options?.skipTextOutput) {
+            this.store.addMessage({ role: 'ai', content: textContent, contentType: 'text' });
+          }
           this.conversationHistory.push({ role: 'assistant', content: textContent });
         }
       }
@@ -873,6 +893,21 @@ export class ChatOrchestrator {
     }
 
     return fullText;
+  }
+
+  /** 本地打字机效果（不调 AI，逐字输出固定文本） */
+  private async _typewriterMessage(text: string, charDelay = 30): Promise<string> {
+    const msgId = this.store.addMessage({ role: 'ai', content: '', contentType: 'text' });
+    this.store.setStreamingId(msgId);
+    for (let i = 0; i < text.length; i++) {
+      const msg = this.store.messages.find(m => m.id === msgId);
+      if (msg) msg.content = text.slice(0, i + 1);
+      await new Promise(r => setTimeout(r, charDelay));
+    }
+    this.store.updateMessageContent(msgId, text);
+    this.store.setStreamingId(null);
+    this.conversationHistory.push({ role: 'assistant', content: text });
+    return msgId;
   }
 
   /** 处理套餐推荐流程（流式展示推荐理由） */
