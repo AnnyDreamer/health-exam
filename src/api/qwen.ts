@@ -6,7 +6,7 @@
  * - 流式响应（SSE）用于打字机效果
  * - 多模态图片解读（qwen-vl-plus）
  */
-import type { QwenMessage, QwenResponse } from '@/types/chat';
+import type { QwenMessage, QwenResponse, ToolDef, ToolCall } from '@/types/chat';
 
 const QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
@@ -27,16 +27,21 @@ export function isQwenAvailable(): boolean {
   return !!getApiKey();
 }
 
+/** tool_choice 类型 */
+export type ToolChoice = 'auto' | 'none' | { type: 'function'; function: { name: string } };
+
 /**
  * 发送非流式请求到千问 API
  */
 export async function qwenChat(
-  messages: QwenMessage[],
+  messages: (QwenMessage | { role: 'tool'; tool_call_id: string; content: string } | { role: 'assistant'; content: string | null; tool_calls: ToolCall[] })[],
   options?: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
     responseFormat?: { type: string };
+    tools?: ToolDef[];
+    tool_choice?: ToolChoice;
   },
 ): Promise<QwenResponse> {
   const apiKey = getApiKey();
@@ -53,6 +58,13 @@ export async function qwenChat(
 
   if (options?.responseFormat) {
     body.response_format = options.responseFormat;
+  }
+
+  if (options?.tools?.length) {
+    body.tools = options.tools;
+    if (options.tool_choice) {
+      body.tool_choice = options.tool_choice;
+    }
   }
 
   const response = await fetch(QWEN_BASE_URL, {
@@ -72,26 +84,49 @@ export async function qwenChat(
   return response.json() as Promise<QwenResponse>;
 }
 
+/** 流式请求的返回结果 */
+export interface StreamResult {
+  text: string;
+  toolCalls: ToolCall[];
+}
+
 /**
  * 发送流式请求到千问 API（SSE）
  *
  * @param messages - 对话消息列表
  * @param onChunk  - 每收到一段文本增量时的回调
  * @param options  - 可选参数
- * @returns 完整的 AI 回复文本
+ * @returns 完整的 AI 回复文本和 tool_calls
  */
 export async function qwenChatStream(
-  messages: QwenMessage[],
+  messages: (QwenMessage | { role: 'tool'; tool_call_id: string; content: string } | { role: 'assistant'; content: string | null; tool_calls: ToolCall[] })[],
   onChunk: (chunk: string) => void,
   options?: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    tools?: ToolDef[];
+    tool_choice?: ToolChoice;
   },
-): Promise<string> {
+): Promise<StreamResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('VITE_QWEN_API_KEY 未配置');
+  }
+
+  const body: Record<string, unknown> = {
+    model: options?.model || getModel(),
+    messages,
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.maxTokens ?? 2048,
+    stream: true,
+  };
+
+  if (options?.tools?.length) {
+    body.tools = options.tools;
+    if (options.tool_choice) {
+      body.tool_choice = options.tool_choice;
+    }
   }
 
   const response = await fetch(QWEN_BASE_URL, {
@@ -100,13 +135,7 @@ export async function qwenChatStream(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: options?.model || getModel(),
-      messages,
-      temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.maxTokens ?? 2048,
-      stream: true,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -122,6 +151,9 @@ export async function qwenChatStream(
   const decoder = new TextDecoder('utf-8');
   let fullText = '';
   let buffer = '';
+
+  // 累积 tool_calls（arguments 是分块拼接的）
+  const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
 
   try {
     while (true) {
@@ -144,10 +176,34 @@ export async function qwenChatStream(
 
         try {
           const parsed: QwenResponse = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            fullText += delta;
-            onChunk(delta);
+          const choice = parsed.choices?.[0];
+          if (!choice?.delta) continue;
+
+          // 处理文本内容
+          const textDelta = choice.delta.content;
+          if (textDelta) {
+            fullText += textDelta;
+            onChunk(textDelta);
+          }
+
+          // 处理 tool_calls 增量
+          const deltaToolCalls = choice.delta.tool_calls;
+          if (deltaToolCalls) {
+            for (const tc of deltaToolCalls) {
+              const idx = tc.index ?? 0;
+              if (!toolCallsMap.has(idx)) {
+                toolCallsMap.set(idx, {
+                  id: tc.id || '',
+                  name: tc.function?.name || '',
+                  arguments: tc.function?.arguments || '',
+                });
+              } else {
+                const existing = toolCallsMap.get(idx)!;
+                if (tc.id) existing.id = tc.id;
+                if (tc.function?.name) existing.name = tc.function.name;
+                if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              }
+            }
           }
         } catch {
           // 忽略解析失败的行（可能是不完整的 JSON）
@@ -158,7 +214,19 @@ export async function qwenChatStream(
     reader.releaseLock();
   }
 
-  return fullText;
+  // 组装最终的 tool_calls
+  const toolCalls: ToolCall[] = [];
+  for (const [, tc] of toolCallsMap) {
+    if (tc.id && tc.name) {
+      toolCalls.push({
+        id: tc.id,
+        type: 'function',
+        function: { name: tc.name, arguments: tc.arguments },
+      });
+    }
+  }
+
+  return { text: fullText, toolCalls };
 }
 
 /**
@@ -190,10 +258,11 @@ export async function qwenVisionStream(
     },
   ];
 
-  return qwenChatStream(messages, onChunk, {
+  const result = await qwenChatStream(messages, onChunk, {
     model: getVLModel(),
     maxTokens: 4096,
   });
+  return result.text;
 }
 
 const QWEN_FILES_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/files';
@@ -274,8 +343,9 @@ export async function qwenDocStream(
     },
   ];
 
-  return qwenChatStream(messages, onChunk, {
+  const result = await qwenChatStream(messages, onChunk, {
     model: 'qwen-long',
     maxTokens: 4096,
   });
+  return result.text;
 }

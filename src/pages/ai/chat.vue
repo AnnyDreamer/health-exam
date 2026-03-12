@@ -246,6 +246,101 @@
                   </view>
                 </view>
               </template>
+              <template v-if="msg.contentType === 'risk-summary'">
+                <!-- 加载态：分析中 -->
+                <view v-if="msg.planGenerating" class="risk-summary-card risk-loading-card">
+                  <view class="risk-loading-header">
+                    <view class="risk-loading-icon-wrap">
+                      <view class="risk-loading-pulse"></view>
+                      <HeartPulse :size="20" color="#0D9488" class="risk-loading-icon" />
+                    </view>
+                    <view class="risk-loading-title-area">
+                      <text class="risk-loading-title">{{ msg.isReportInterpretation ? '报告解读中' : '健康风险分析中' }}</text>
+                      <text class="risk-loading-subtitle">{{ msg.isReportInterpretation ? '正在为您解读体检报告并生成健康方案' : '正在为您生成个性化健康管理方案' }}</text>
+                    </view>
+                  </view>
+                  <view class="risk-loading-steps">
+                    <view class="risk-step risk-step-1">
+                      <view class="risk-step-indicator"></view>
+                      <text class="risk-step-label">{{ msg.isReportInterpretation ? '解读报告内容' : '分析健康指标' }}</text>
+                    </view>
+                    <view class="risk-step risk-step-2">
+                      <view class="risk-step-indicator"></view>
+                      <text class="risk-step-label">评估风险等级</text>
+                    </view>
+                    <view class="risk-step risk-step-3">
+                      <view class="risk-step-indicator"></view>
+                      <text class="risk-step-label">生成管理方案</text>
+                    </view>
+                  </view>
+                  <view class="risk-loading-bar-wrap">
+                    <view class="risk-loading-bar-track">
+                      <view class="risk-loading-bar-fill"></view>
+                    </view>
+                    <text class="risk-loading-eta">{{ msg.isReportInterpretation ? '预计 30 秒' : '预计 15 秒' }}</text>
+                  </view>
+                </view>
+                <!-- 完成态：报告解读结果（点击看解读全文） -->
+                <view v-else-if="msg.isReportInterpretation && msg.reportFullText" class="risk-summary-card" @tap="openReportDrawer(msg)">
+                  <view class="risk-summary-header">
+                    <text class="risk-summary-title">报告解读结果</text>
+                    <view class="risk-summary-total">
+                      <text class="risk-total-text">{{ msg.followUpPlan?.riskItems?.length || 0 }}项异常</text>
+                      <text class="risk-total-arrow">›</text>
+                    </view>
+                  </view>
+                  <view v-if="msg.followUpPlan" class="risk-level-row">
+                    <view v-if="getRiskCount(msg.followUpPlan, 'high') > 0" class="risk-level-tag risk-tag-high">
+                      <view class="risk-dot dot-high"></view>
+                      <text class="risk-level-text">高风险 {{ getRiskCount(msg.followUpPlan, 'high') }}项</text>
+                    </view>
+                    <view v-if="getRiskCount(msg.followUpPlan, 'medium') > 0" class="risk-level-tag risk-tag-medium">
+                      <view class="risk-dot dot-medium"></view>
+                      <text class="risk-level-text">中风险 {{ getRiskCount(msg.followUpPlan, 'medium') }}项</text>
+                    </view>
+                    <view v-if="getRiskCount(msg.followUpPlan, 'low') > 0" class="risk-level-tag risk-tag-low">
+                      <view class="risk-dot dot-low"></view>
+                      <text class="risk-level-text">低风险 {{ getRiskCount(msg.followUpPlan, 'low') }}项</text>
+                    </view>
+                  </view>
+                  <text class="risk-summary-text">{{ msg.content }}</text>
+                  <view class="risk-summary-btn">
+                    <text class="risk-summary-btn-text">查看解读详情</text>
+                  </view>
+                </view>
+                <!-- 完成态：健康管理方案（点击看 FollowUpCard 弹窗） -->
+                <view v-else-if="msg.followUpPlan" class="risk-summary-card" @tap="openRiskDetail(msg.followUpPlan!)">
+                  <view class="risk-summary-header">
+                    <text class="risk-summary-title">健康管理方案</text>
+                    <view class="risk-summary-total">
+                      <text class="risk-total-text">{{ msg.followUpPlan.riskItems?.length || 0 }}项风险</text>
+                      <text class="risk-total-arrow">›</text>
+                    </view>
+                  </view>
+                  <view class="risk-level-row">
+                    <view v-if="getRiskCount(msg.followUpPlan, 'high') > 0" class="risk-level-tag risk-tag-high">
+                      <view class="risk-dot dot-high"></view>
+                      <text class="risk-level-text">高风险 {{ getRiskCount(msg.followUpPlan, 'high') }}项</text>
+                    </view>
+                    <view v-if="getRiskCount(msg.followUpPlan, 'medium') > 0" class="risk-level-tag risk-tag-medium">
+                      <view class="risk-dot dot-medium"></view>
+                      <text class="risk-level-text">中风险 {{ getRiskCount(msg.followUpPlan, 'medium') }}项</text>
+                    </view>
+                    <view v-if="getRiskCount(msg.followUpPlan, 'low') > 0" class="risk-level-tag risk-tag-low">
+                      <view class="risk-dot dot-low"></view>
+                      <text class="risk-level-text">低风险 {{ getRiskCount(msg.followUpPlan, 'low') }}项</text>
+                    </view>
+                  </view>
+                  <text class="risk-summary-text">{{ msg.content }}</text>
+                  <view class="risk-summary-btn">
+                    <text class="risk-summary-btn-text">查看健康管理方案</text>
+                  </view>
+                </view>
+                <!-- 无 plan 但有内容（失败等） -->
+                <view v-else-if="msg.content" class="risk-summary-card">
+                  <text class="risk-summary-text">{{ msg.content }}</text>
+                </view>
+              </template>
               <template v-if="msg.contentType === 'package-card' && msg.packageCard">
                 <PackageCard
                   :name="msg.packageCard.name"
@@ -263,37 +358,8 @@
                   @customize="openPackagePopup(msg.packageCard!.id)"
                 />
               </template>
-              <template v-if="msg.contentType === 'follow-up-plan' && msg.followUpPlan">
-                <FollowUpCard
-                  :plan="msg.followUpPlan"
-                  @book="handleFollowUpBook(msg.followUpPlan!)"
-                />
-              </template>
               <template v-if="msg.contentType === 'appointment-card' && msg.appointmentCard">
                 <AppointmentConfirmCard :data="msg.appointmentCard" />
-              </template>
-              <template v-if="msg.isReportInterpretation && msg.content && msg.reportId">
-                <!-- 有 followUpPlan 时展示查看报告详情按钮 -->
-                <view v-if="msg.followUpPlan" class="report-link-btn" @tap="openReportDrawer(msg)">
-                  <text class="report-link-text">查看报告详情</text>
-                  <ChevronRight :size="14" color="#0D9488" />
-                </view>
-                <!-- plan 正在生成中，展示进度条 -->
-                <view v-else-if="msg.planGenerating" class="report-generating-card">
-                  <view class="generating-header">
-                    <view class="generating-spinner"></view>
-                    <text class="generating-text">正在生成报告详情...</text>
-                  </view>
-                  <view class="generating-progress-track">
-                    <view class="generating-progress-bar"></view>
-                  </view>
-                  <text class="generating-hint">正在分析异常项并生成健康建议</text>
-                </view>
-                <!-- 兜底：plan 生成完毕但失败，或从历史恢复 -->
-                <view v-else class="report-link-btn" @tap="openReportDrawer(msg)">
-                  <text class="report-link-text">查看完整报告</text>
-                  <text class="report-link-arrow">›</text>
-                </view>
               </template>
             </ChatBubble>
           </view>
@@ -394,6 +460,33 @@
       @close="showFollowUpBooking = false"
       @confirm="handleFollowUpConfirm"
     />
+
+    <!-- 风险分析详情弹窗 -->
+    <view v-if="showRiskDetail && riskDetailPlan" class="risk-popup-mask">
+      <view class="risk-popup-bg" @tap="showRiskDetail = false" @touchmove.prevent></view>
+      <view class="risk-popup-sheet">
+        <view class="sheet-handle"><view class="handle-bar"></view></view>
+        <scroll-view scroll-y class="risk-popup-scroll" @touchmove.stop>
+          <FollowUpCard
+            :plan="riskDetailPlan"
+            @book="handleRiskDetailBook"
+          />
+        </scroll-view>
+        <view class="risk-popup-bottom" @touchmove.prevent>
+          <view v-if="riskDetailPlan?.needFollowUp && riskDetailPlan?.followUpItems?.length" class="risk-popup-buttons">
+            <view class="risk-popup-btn-primary" @tap="handleRiskDetailBook">
+              <text class="risk-popup-btn-primary-text">预约复查</text>
+            </view>
+            <view class="risk-popup-btn-secondary" @tap="navigateToMakePackage">
+              <text class="risk-popup-btn-secondary-text">制定体检方案</text>
+            </view>
+          </view>
+          <view v-else class="risk-popup-btn-close" @tap="showRiskDetail = false">
+            <text class="risk-popup-btn-close-text">关闭</text>
+          </view>
+        </view>
+      </view>
+    </view>
 
     <!-- 加载数据弹窗 -->
     <view v-if="pagePhase === 'loading'" class="loading-popup-mask">
@@ -581,6 +674,10 @@ const drawerFollowUpPlan = ref<FollowUpPlan | null>(null);
 const showFollowUpBooking = ref(false);
 const pendingFollowUpPlan = ref<FollowUpPlan | null>(null);
 
+// 风险分析详情弹窗
+const showRiskDetail = ref(false);
+const riskDetailPlan = ref<FollowUpPlan | null>(null);
+
 // 滚动相关
 const scrollPosition = ref(0);
 const forceScrollTop = ref<number | undefined>(undefined);
@@ -684,10 +781,32 @@ function scrollToBottom() {
 }
 
 async function enterChat(key: string) {
+  if (showChat.value) {
+    // 已在对话中，不重置，直接在当前对话中发送
+    const labels: Record<string, string> = {
+      'view-risk': '查看健康风险',
+      'make-package': '制定体检套餐',
+      'report-interpret': '体检报告解读',
+      'exam-process': '了解体检流程',
+      'consult': '预约咨询',
+    };
+    await chatStore.sendUserMessage(labels[key] || key, key);
+    scrollToBottom();
+    return;
+  }
   showChat.value = true;
   chatStore.reset();
   await chatStore.startScript(key, hasData.value, userName.value);
   scrollToBottom();
+}
+
+function getRiskCount(plan: FollowUpPlan, level: string): number {
+  return plan.riskItems?.filter(r => r.level === level).length || 0;
+}
+
+function openRiskDetail(plan: FollowUpPlan) {
+  riskDetailPlan.value = plan;
+  showRiskDetail.value = true;
 }
 
 function handleOptionWithMark(msg: ChatMessage, opt: ChatOption) {
@@ -736,6 +855,16 @@ async function handleSendPdf(payload: { base64: string; fileName: string }) {
   scrollToBottom();
 }
 
+function handleRiskDetailBook() {
+  showRiskDetail.value = false;
+  handleFollowUpBook(riskDetailPlan.value || undefined);
+}
+
+function navigateToMakePackage() {
+  showRiskDetail.value = false;
+  enterChat('make-package');
+}
+
 function handleFollowUpBook(plan?: FollowUpPlan) {
   const targetPlan = plan || drawerFollowUpPlan.value;
   if (targetPlan) {
@@ -750,7 +879,7 @@ function previewImage(url: string) {
 
 function openReportDrawer(msg: ChatMessage) {
   const report = msg.reportId ? reportStore.getReportById(msg.reportId) : null;
-  drawerReportContent.value = report?.fullContent || msg.content || '';
+  drawerReportContent.value = report?.fullContent || msg.reportFullText || msg.content || '';
   drawerFollowUpPlan.value = msg.followUpPlan || null;
   showReportDrawer.value = true;
 }
@@ -1415,6 +1544,139 @@ onShow(() => {
   font-family: "Noto Sans SC", sans-serif;
 }
 
+/* ---- 风险分析详情弹窗 ---- */
+.risk-popup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 650;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.risk-popup-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  animation: overlayFadeIn 0.2s ease;
+}
+
+.risk-popup-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 500px;
+  background: linear-gradient(180deg, rgba(232, 245, 242, 0.97) 0%, rgba(245, 250, 249, 0.97) 40%, rgba(255, 255, 255, 0.97) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 28px 28px 0 0;
+  height: 75vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -8px 40px rgba(13, 148, 136, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  animation: sheetSlideUp 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.risk-popup-scroll {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 20px 12px;
+  box-sizing: border-box;
+}
+
+/* 弹窗内 FollowUpCard 样式覆盖 */
+.risk-popup-scroll :deep(.followup-card) {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  padding: 0;
+  gap: 12px;
+}
+
+.risk-popup-scroll :deep(.tab-content) {
+  min-height: 0;
+}
+
+.risk-popup-scroll :deep(.advice-panel) {
+  gap: 10px;
+}
+
+/* 弹窗内隐藏 FollowUpCard 自带的操作按钮 */
+.risk-popup-scroll :deep(.followup-actions) {
+  display: none;
+}
+
+.risk-popup-bottom {
+  flex-shrink: 0;
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.risk-popup-buttons {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.risk-popup-btn-primary {
+  flex: 1;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.25);
+
+  &:active { opacity: 0.9; }
+}
+
+.risk-popup-btn-primary-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-popup-btn-secondary {
+  flex: 1;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:active { opacity: 0.7; }
+}
+
+.risk-popup-btn-secondary-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-popup-btn-close {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:active { opacity: 0.7; }
+}
+
+.risk-popup-btn-close-text {
+  font-size: 14px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
 /* ---- 加载数据弹窗 ---- */
 .loading-popup-mask {
   position: fixed;
@@ -2031,6 +2293,271 @@ onShow(() => {
 @keyframes ldBounce {
   0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
   40% { opacity: 1; transform: translateY(-4px); }
+}
+
+/* 风险摘要卡片 */
+.risk-summary-card {
+  background: linear-gradient(135deg, rgba(237, 233, 254, 0.7) 0%, rgba(219, 234, 254, 0.5) 100%);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 4px;
+}
+
+.risk-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.risk-summary-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1F2937;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-summary-total {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.risk-total-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-total-arrow {
+  font-size: 16px;
+  color: #0D9488;
+  font-weight: 500;
+}
+
+.risk-level-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.risk-level-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.risk-tag-high { background: rgba(254, 226, 226, 0.7); }
+.risk-tag-medium { background: rgba(254, 243, 199, 0.7); }
+.risk-tag-low { background: rgba(220, 252, 231, 0.7); }
+
+.risk-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot-high { background: #EF4444; }
+.dot-medium { background: #F59E0B; }
+.dot-low { background: #22C55E; }
+
+.risk-level-text {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-summary-text {
+  display: block;
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.6;
+  margin-bottom: 14px;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-summary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+  background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
+  border-radius: 10px;
+}
+
+.risk-summary-btn-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* 风险分析加载卡片 */
+.risk-loading-card {
+  background: linear-gradient(135deg, rgba(237, 233, 254, 0.5) 0%, rgba(219, 234, 254, 0.4) 100%);
+}
+
+.risk-loading-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.risk-loading-icon-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.risk-loading-pulse {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(13, 148, 136, 0.12);
+  animation: riskPulse 2s ease-in-out infinite;
+}
+
+@keyframes riskPulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+.risk-loading-icon {
+  position: relative;
+  z-index: 1;
+}
+
+.risk-loading-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.risk-loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2937;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-loading-subtitle {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.risk-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.3;
+  animation: riskStepIn 0.4s ease forwards;
+}
+
+.risk-step-1 { animation-delay: 0.3s; }
+.risk-step-2 { animation-delay: 4s; }
+.risk-step-3 { animation-delay: 8s; }
+
+@keyframes riskStepIn {
+  to { opacity: 1; }
+}
+
+.risk-step-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #D1D5DB;
+  flex-shrink: 0;
+  animation: riskDotPulse 1.5s ease-in-out infinite;
+}
+
+.risk-step-1 .risk-step-indicator {
+  background: #0D9488;
+  animation-delay: 0.3s;
+}
+.risk-step-2 .risk-step-indicator {
+  animation-delay: 4s;
+}
+.risk-step-3 .risk-step-indicator {
+  animation-delay: 8s;
+}
+
+/* 步骤激活后变绿 */
+.risk-step-1 .risk-step-indicator { background: #0D9488; }
+.risk-step-2 .risk-step-indicator { animation: riskDotActivate 0.4s 4s ease forwards; }
+.risk-step-3 .risk-step-indicator { animation: riskDotActivate 0.4s 8s ease forwards; }
+
+@keyframes riskDotActivate {
+  to { background: #0D9488; }
+}
+
+@keyframes riskDotPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.risk-step-label {
+  font-size: 13px;
+  color: #6B7280;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-loading-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.risk-loading-bar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(209, 213, 219, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.risk-loading-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0D9488, #14B8A6);
+  border-radius: 2px;
+  width: 0%;
+  animation: riskBarFill 15s ease-in-out forwards;
+}
+
+@keyframes riskBarFill {
+  0% { width: 0%; }
+  20% { width: 25%; }
+  50% { width: 55%; }
+  80% { width: 80%; }
+  100% { width: 95%; }
+}
+
+.risk-loading-eta {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "DM Sans", "Noto Sans SC", sans-serif;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 聊天中的图片缩略图 */

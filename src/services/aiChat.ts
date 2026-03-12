@@ -7,7 +7,7 @@
  * - recommendPackageStream: 套餐推荐（流式输出推荐理由 + 结构化 JSON）
  */
 import { qwenChatStream, qwenVisionStream, qwenDocStream, qwenChat } from '@/api/qwen';
-import type { QwenMessage, AIPackageRecommendation, FollowUpPlan } from '@/types/chat';
+import type { QwenMessage, AIPackageRecommendation, FollowUpPlan, RiskItem } from '@/types/chat';
 
 /** 系统提示词 */
 const SYSTEM_PROMPT = `你是一位专业的健康体检顾问AI助手，服务于健康体检中心。你的职责是：
@@ -109,7 +109,7 @@ JSON 格式：
   "followUpItems": [
     {
       "name": "项目名称",
-      "reason": "原因说明，必须引用报告中的具体数值和正常参考范围，说明偏离程度和可能的临床意义，至少2-3句话",
+      "reason": "简短原因，一句话说明为什么需要这项检查",
       "suggestedTime": "建议时间",
       "department": "相关科室",
       "doctor": "推荐就诊医生姓名+职称（如'张主任/主任医师'），根据科室合理虚拟一位专家",
@@ -134,38 +134,82 @@ followUpItems type：
 - 只列异常项，正常项不列
 - 全部正常时 needFollowUp=false, followUpItems=[]`;
 
-/** 第二步：生成详细健康建议（diet/exercise/medical） */
-const FOLLOW_UP_ADVICE_PROMPT = `你是三甲医院健康管理中心的主任医师，有20年临床经验。请根据体检报告解读结果，生成详细的健康干预建议。
+/** 第二步：生成简明健康建议（diet/exercise/medical） */
+const FOLLOW_UP_ADVICE_PROMPT = `你是三甲医院健康管理中心的主任医师。请根据体检报告解读结果，生成简明的健康干预建议。
 你必须严格以 JSON 格式返回，不要包含任何其他文字或 markdown 代码块标记。
 
 JSON 格式：
 {
-  "dietAdvice": "饮食干预方案",
-  "exerciseAdvice": "运动处方",
-  "medicalAdvice": "就医复查计划"
+  "dietAdvice": "饮食建议",
+  "exerciseAdvice": "运动建议",
+  "medicalAdvice": "复查就医建议"
 }
 
-【最重要】健康建议必须详细、专业、有说服力，这是给患者看的正式报告，不是敷衍的摘要！
+【核心要求】每条建议必须精简！格式为"关键行动——简短原因"，每条不超过30个字。用户在手机上阅读，大段文字没人看。
 
-dietAdvice 饮食干预方案（必须 5-8 条，每条用"\\n"换行分隔，每条以"• "开头）：
-- 必须针对报告中的具体异常指标给出饮食建议，说明为什么这样吃
-- 包含：应该多吃什么（具体食物名称、每日推荐量）、应该少吃/避免什么、烹饪方式建议
-- 参考示例：
-"• 控制每日钠盐摄入不超过5克——您的血压偏高(138/88mmHg)，高钠饮食会进一步升高血压。建议做菜少放盐，避免咸菜、腊肉、方便面等加工食品\\n• 每日摄入300-500克新鲜蔬菜，优先选择西兰花、菠菜、芹菜等深色蔬菜——富含膳食纤维和钾元素，有助于降低血脂和血压\\n• 主食粗细搭配，用燕麦、糙米、红薯替代1/3精白米面——可溶性膳食纤维能减缓糖类吸收，改善您偏高的血糖水平\\n• 每周食用深海鱼类（三文鱼、鲭鱼、沙丁鱼）2-3次——富含Omega-3脂肪酸，能降低甘油三酯，对您的高血脂有直接改善作用\\n• 每天食用一小把原味坚果（约25克核桃或杏仁）——含不饱和脂肪酸和维生素E，有助于调节血脂代谢\\n• 严格限制酒精摄入，建议戒酒——酒精会加重肝脏负担，您的转氨酶已偏高，饮酒会进一步损伤肝功能\\n• 烹饪方式以蒸、煮、炖、凉拌为主，减少煎炸烧烤——高温油炸会产生反式脂肪酸，加重血脂异常"
+dietAdvice（3-4条，用"\\n"分隔，"• "开头）：
+- 每条只说"做什么——为什么"，不展开细节
+- 示例："• 每日钠盐控制在5克以内——降低血压\\n• 多吃深色蔬菜和深海鱼——补充钾和Omega-3\\n• 减少精制碳水主食——控制血糖波动\\n• 戒酒——保护肝功能"
 
-exerciseAdvice 运动处方（必须 4-6 条，格式同上）：
-- 必须结合患者的具体异常给出针对性的运动方案
-- 包含：推荐运动类型、每周频率、每次时长、运动强度控制、注意事项和禁忌
-- 参考示例：
-"• 每周进行至少150分钟中等强度有氧运动——这是《中国高血压防治指南》推荐的运动量，能有效降低收缩压5-8mmHg。推荐快走、慢跑、游泳、骑自行车\\n• 每次运动持续30-45分钟，运动前热身10分钟、运动后拉伸5分钟——循序渐进，避免运动损伤。可从每天20分钟快走开始，逐渐增加时长\\n• 运动时监测心率，保持在(220-年龄)×60%-70%范围内——以您58岁为例，运动心率控制在97-113次/分钟，微微出汗、能正常说话为宜\\n• 每周增加2-3次抗阻训练（如哑铃、弹力带、深蹲）——增强肌肉力量有助于提高基础代谢率，改善胰岛素敏感性，辅助降低血糖\\n• 避免空腹运动和高强度无氧运动——您的血糖偏高，空腹剧烈运动可能导致低血糖；建议在餐后1小时进行运动\\n• 运动应持之以恒，至少坚持12周才能看到血脂和血压的明显改善——研究表明规律运动可降低总胆固醇10%-20%"
+exerciseAdvice（3-4条，格式同上）：
+- 只写运动类型+频率+关联指标
+- 示例："• 每周快走或慢跑150分钟——改善血压血脂\\n• 餐后1小时散步30分钟——辅助控制血糖\\n• 每周2次力量训练——提高代谢率"
 
-medicalAdvice 就医复查计划（必须 3-5 条，格式同上）：
-- 必须明确：去哪个科室、做什么检查、什么时间去、为什么要做
-- 包含时间线规划，从最紧急的到常规随访
-- 参考示例：
-"• 2周内至心血管内科就诊——您的血压138/88mmHg已达高血压1级标准，心电图显示T波低平，需进一步完善心脏彩超和24小时动态血压监测，评估是否需要启动降压药物治疗\\n• 1个月内至呼吸内科就诊——肺部CT发现6mm磨玻璃结节，虽然大概率为良性，但需要专科医生评估，制定随访方案。建议携带本次CT影像就诊\\n• 3个月后复查血脂全套(总胆固醇、甘油三酯、LDL-C、HDL-C)+肝功能(ALT、AST、GGT)——通过3个月的饮食运动干预，观察血脂和肝功能改善情况，评估是否需要药物干预\\n• 6个月后复查肺部CT——对比结节大小变化，这是肺结节随访的标准方案。如结节无变化则延长至每年复查一次\\n• 每年进行一次全面健康体检——重点监测心血管系统、代谢指标和肺部情况，做到早发现早干预"
+medicalAdvice（2-3条，格式同上）：
+- 只写时间+科室+原因
+- 示例："• 2周内心血管内科就诊——血压达高血压标准\\n• 3个月后复查血脂和肝功能——评估干预效果\\n• 6个月后复查肺部CT——随访肺结节变化"
 
-注意：以上只是参考格式和写法风格。你必须根据实际报告内容生成针对性的建议，引用报告中的真实数据。不要照抄示例！`;
+注意：必须根据实际报告内容生成针对性建议，引用具体异常指标。不要照抄示例。`;
+
+/** 风险分析统一提示词（一次返回完整结构化数据） */
+const RISK_ANALYSIS_PROMPT = `你是三甲医院健康管理中心的主任医师，有20年临床经验。请根据用户的健康数据，一次性生成完整的风险分析和健康管理方案。
+你必须严格以 JSON 格式返回，不要包含任何其他文字或 markdown 代码块标记。
+
+JSON 格式：
+{
+  "riskItems": [
+    {
+      "category": "风险类别名称（如'血压偏高'）",
+      "level": "low" | "medium" | "high",
+      "indicators": ["具体指标值，如'收缩压 128 mmHg ↑'"],
+      "brief": "一句话风险说明，不超过25字"
+    }
+  ],
+  "needFollowUp": true,
+  "urgencyLevel": "normal" | "soon" | "urgent",
+  "followUpItems": [
+    {
+      "name": "项目名称",
+      "reason": "简短原因，一句话",
+      "suggestedTime": "建议时间",
+      "department": "相关科室",
+      "doctor": "推荐医生姓名+职称",
+      "type": "lifestyle" | "recheck" | "outpatient",
+      "registrationFee": 25,
+      "feeType": "普通号" | "专家号" | "特需号"
+    }
+  ],
+  "generalAdvice": "总体建议（1-2句话）",
+  "dietAdvice": "饮食建议（3-4条，用\\n分隔，• 开头，每条不超过30字，格式：做什么——原因）",
+  "exerciseAdvice": "运动建议（3-4条，格式同上）",
+  "medicalAdvice": "复查就医建议（2-3条，格式：时间+科室——原因）"
+}
+
+riskItems 规则：
+- 每项只针对一个风险类别，indicators 列出该类别下的异常指标值
+- level 判断：严重超标或病变=high，中度异常=medium，轻微偏离=low
+- brief 精简到一句话核心风险说明
+- 只列异常项，正常项不列
+
+urgencyLevel 判断：
+- "urgent"：存在 outpatient 项目或高风险异常
+- "soon"：存在 recheck 项目或 ≥3项异常
+- "normal"：仅轻微异常或全部正常
+
+followUpItems type / registrationFee / feeType：
+- "lifestyle": 生活方式干预，registrationFee=0
+- "recheck": 复查项目，registrationFee=25，feeType="普通号"
+- "outpatient": 门诊就医，registrationFee=50或200，feeType="专家号"或"特需号"`;
 
 /** 套餐推荐系统提示词（流式版：先输出推荐理由文字，再输出 JSON） */
 const PACKAGE_SYSTEM_PROMPT = `你是一位专业的体检套餐推荐AI助手。请根据用户信息推荐个性化的体检套餐。
@@ -332,9 +376,12 @@ export async function sendChatMessage(
   systemPrompt?: string,
 ): Promise<string> {
   const builtMessages = buildMessages(messages, systemPrompt || SYSTEM_PROMPT);
-  return qwenChatStream(builtMessages, onChunk);
+  const result = await qwenChatStream(builtMessages, onChunk);
+  return result.text;
 }
 
+// 以下提示词在 Tool 模式下不再外部使用，由 chatOrchestrator 内置精简版替代
+// 保留定义供 aiChat.ts 内部函数使用（recommendPackageStream 等）
 export { GUIDED_PACKAGE_SYSTEM_PROMPT, MAKE_PACKAGE_WITH_DATA_PROMPT, GROUP_PACKAGE_SYSTEM_PROMPT };
 
 /**
@@ -462,6 +509,70 @@ export async function generateFollowUpPlan(
 }
 
 /**
+ * 统一风险分析（1 次 AI 调用返回完整结构化数据）
+ *
+ * @param healthInfo - 用户健康数据摘要
+ * @returns 完整的风险分析 + 复查方案
+ */
+export async function generateRiskAnalysis(
+  healthInfo: string,
+): Promise<FollowUpPlan & { summary?: string }> {
+  const userContent = `以下是用户的健康数据，请生成完整的风险分析和健康管理方案：\n\n${healthInfo}`;
+
+  const response = await qwenChat(
+    [
+      { role: 'system', content: RISK_ANALYSIS_PROMPT },
+      { role: 'user', content: userContent },
+    ],
+    { temperature: 0.3, maxTokens: 4000, responseFormat: { type: 'json_object' } },
+  );
+  const content = response.choices?.[0]?.message?.content || '';
+
+  let data: any;
+  try {
+    data = parseAIJson(content);
+  } catch (e) {
+    console.error('风险分析 JSON 解析失败:', e, content);
+    throw new Error('AI 返回数据格式异常，请重试');
+  }
+
+  const riskItems: RiskItem[] = Array.isArray(data.riskItems)
+    ? data.riskItems.map((item: any) => ({
+        category: item.category || '',
+        level: (['low', 'medium', 'high'].includes(item.level) ? item.level : 'medium') as RiskItem['level'],
+        indicators: Array.isArray(item.indicators) ? item.indicators : [],
+        brief: item.brief || '',
+      }))
+    : [];
+
+  const followUpItems = Array.isArray(data.followUpItems)
+    ? data.followUpItems.map((item: any) => {
+        const type = item.type || 'recheck';
+        const defaultFee = type === 'lifestyle' ? 0 : type === 'outpatient' ? 50 : 25;
+        return {
+          ...item,
+          type,
+          registrationFee: typeof item.registrationFee === 'number' ? item.registrationFee : defaultFee,
+          feeType: item.feeType || (type === 'outpatient' ? '专家号' : '普通号'),
+        };
+      })
+    : [];
+
+  return {
+    needFollowUp: !!data.needFollowUp,
+    urgencyLevel: (['normal', 'soon', 'urgent'].includes(data.urgencyLevel)
+      ? data.urgencyLevel
+      : 'normal') as FollowUpPlan['urgencyLevel'],
+    followUpItems,
+    generalAdvice: data.generalAdvice || '',
+    dietAdvice: data.dietAdvice,
+    exerciseAdvice: data.exerciseAdvice,
+    medicalAdvice: data.medicalAdvice,
+    riskItems,
+  };
+}
+
+/**
  * 从 AI 返回的完整文本中提取推荐理由和 JSON 数据
  *
  * AI 返回格式：先是推荐理由文字，然后是 ```json ... ``` 代码块
@@ -579,7 +690,7 @@ export async function recommendPackageStream(
   let accumulatedText = '';
   let sentLength = 0; // 已通过 onReasonChunk 发送的字符数
 
-  const fullText = await qwenChatStream(messages, (chunk: string) => {
+  const streamResult = await qwenChatStream(messages, (chunk: string) => {
     accumulatedText += chunk;
 
     if (inJsonBlock) return; // JSON 代码块内的 chunk 不回调
@@ -609,6 +720,8 @@ export async function recommendPackageStream(
     temperature: 0.3,
     maxTokens: 2048,
   });
+
+  const fullText = streamResult.text;
 
   // 流式结束后，如果没有进入 JSON 块，把剩余未发送的文字发出去
   if (!inJsonBlock && sentLength < accumulatedText.length) {

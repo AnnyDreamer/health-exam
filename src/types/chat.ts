@@ -1,5 +1,5 @@
 export type MessageRole = 'ai' | 'user';
-export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan' | 'appointment-card' | 'loading';
+export type MessageContentType = 'text' | 'health-card' | 'package-card' | 'options' | 'image' | 'pdf' | 'follow-up-plan' | 'appointment-card' | 'loading' | 'risk-summary';
 
 /** 预约确认卡片数据 */
 export interface AppointmentCardData {
@@ -52,6 +52,14 @@ export interface PackageCardData {
   aiAddonDiscount?: number;
 }
 
+/** 风险分析项 */
+export interface RiskItem {
+  category: string;    // "血压偏高"、"血脂异常"
+  level: 'low' | 'medium' | 'high';
+  indicators: string[];   // ["收缩压 128 mmHg ↑", "舒张压 82 mmHg"]
+  brief: string;          // 一句话风险说明
+}
+
 /** 复查方案项目 */
 export interface FollowUpItem {
   name: string;
@@ -73,6 +81,7 @@ export interface FollowUpPlan {
   dietAdvice?: string;
   exerciseAdvice?: string;
   medicalAdvice?: string;
+  riskItems?: RiskItem[];
 }
 
 export interface ChatMessage {
@@ -96,6 +105,8 @@ export interface ChatMessage {
   reportId?: string;
   /** 标记报告详情（复查方案）正在生成中 */
   planGenerating?: boolean;
+  /** 报告解读全文（用于点击查看详情） */
+  reportFullText?: string;
   timestamp: number;
 }
 
@@ -125,8 +136,8 @@ export interface QwenMessage {
 /** 千问 API 响应格式 */
 export interface QwenChoice {
   index: number;
-  message?: { role: string; content: string };
-  delta?: { role?: string; content?: string };
+  message?: { role: string; content: string; tool_calls?: ToolCall[] };
+  delta?: { role?: string; content?: string; tool_calls?: (Partial<ToolCall> & { index?: number })[] };
   finish_reason: string | null;
 }
 
@@ -144,4 +155,42 @@ export interface AIPackageRecommendation {
   totalPrice: number;
   originalPrice?: number;
   reason: string;
+}
+
+// ============================================================
+// Function Calling / Tool 模式相关类型
+// ============================================================
+
+/** Function Calling 工具函数定义 */
+export interface ToolFunction {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>; // JSON Schema
+}
+
+/** 工具定义（发给 Qwen API） */
+export interface ToolDef {
+  type: 'function';
+  function: ToolFunction;
+}
+
+/** AI 返回的 tool_call */
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+/** tool 执行结果消息（回传给 AI） */
+export interface ToolResultMessage {
+  role: 'tool';
+  tool_call_id: string;
+  content: string;
+}
+
+/** 带 tool_calls 的 assistant 消息 */
+export interface AssistantToolCallMessage {
+  role: 'assistant';
+  content: string | null;
+  tool_calls: ToolCall[];
 }

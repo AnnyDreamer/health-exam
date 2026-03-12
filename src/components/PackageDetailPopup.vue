@@ -65,7 +65,7 @@
               </view>
             </view>
             <view v-show="aiExpanded">
-              <text class="ai-addon-hint">根据您的健康状况，建议增补以下检查项目</text>
+              <text class="ai-addon-hint">根据您的健康状况，建议在团检基础上增补以下检查</text>
               <view class="items-list">
                 <view v-for="item in aiAddonItems" :key="item.id" class="check-item" :class="{ 'check-item--unchecked': !selectedIds.has(item.id) }" @tap="toggleItem(item.id)">
                   <view class="check-item-top">
@@ -84,7 +84,7 @@
             </view>
           </template>
 
-          <!-- 普通展示 -->
+          <!-- 普通展示（AI 个人推荐） -->
           <template v-else>
             <text class="items-title">检查项目 ({{ selectedCount }}/{{ pkg.items.length }}项)</text>
             <view class="items-list">
@@ -97,8 +97,8 @@
                   <text class="item-price">¥{{ item.price }}</text>
                 </view>
                 <text v-if="item.description" class="item-desc">{{ item.description }}</text>
-                <view v-if="item.aiReason" class="ai-reason">
-                  <text class="ai-reason-text">{{ item.aiReason }}</text>
+                <view v-if="item.aiReason" class="ai-reason ai-reason--recommend">
+                  <text class="ai-reason-text ai-reason-text--recommend">{{ item.aiReason }}</text>
                 </view>
               </view>
             </view>
@@ -511,6 +511,18 @@ function handleConfirm() {
     content: "建议增补：";
     color: #EF4444;
     font-weight: 600;
+  }
+}
+
+.ai-reason--recommend {
+  background: rgba(13, 148, 136, 0.05);
+  border: 1px solid rgba(13, 148, 136, 0.1);
+}
+
+.ai-reason-text--recommend {
+  &::before {
+    content: "AI推荐：";
+    color: #0D9488;
   }
 }
 

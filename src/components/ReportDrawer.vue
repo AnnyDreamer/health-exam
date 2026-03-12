@@ -26,7 +26,7 @@
         >
           <text class="tab-label" :class="{ 'tab-label--active': activeTab === tab.key }">{{ tab.label }}<text v-if="tab.badge && tab.badge > 0" class="tab-badge-inline">（{{ tab.badge }}）</text></text>
         </view>
-        <view class="tab-indicator" :style="{ transform: `translateX(${activeTab === 'abnormal' ? 0 : 100}%)` }"></view>
+        <view class="tab-indicator" :style="{ transform: `translateX(${tabIndex * 100}%)` }"></view>
       </view>
 
       <!-- 滚动内容区 -->
@@ -129,11 +129,7 @@
             <!-- 饮食建议 -->
             <view v-if="followUpPlan?.dietAdvice" class="advice-section">
               <view class="advice-header advice-header--diet" @tap="toggleExpand('diet')">
-                <text class="advice-header-icon">🍽</text>
-                <text class="advice-header-title advice-header-title--diet">饮食注意事项</text>
-                <view class="advice-count">
-                  <text class="advice-count-text">{{ parseAdviceLines(followUpPlan.dietAdvice).length }}条</text>
-                </view>
+                <text class="advice-header-title advice-header-title--diet">饮食注意事项（{{ parseAdviceLines(followUpPlan.dietAdvice).length }}）</text>
                 <view class="advice-arrow" :class="{ 'advice-arrow--expanded': expandedMap.diet }">
                   <ChevronDown :size="16" color="#9CA3AF" />
                 </view>
@@ -149,11 +145,7 @@
             <!-- 运动建议 -->
             <view v-if="followUpPlan?.exerciseAdvice" class="advice-section">
               <view class="advice-header advice-header--exercise" @tap="toggleExpand('exercise')">
-                <text class="advice-header-icon">🏃</text>
-                <text class="advice-header-title advice-header-title--exercise">运动建议</text>
-                <view class="advice-count">
-                  <text class="advice-count-text">{{ parseAdviceLines(followUpPlan.exerciseAdvice).length }}条</text>
-                </view>
+                <text class="advice-header-title advice-header-title--exercise">运动建议（{{ parseAdviceLines(followUpPlan.exerciseAdvice).length }}）</text>
                 <view class="advice-arrow" :class="{ 'advice-arrow--expanded': expandedMap.exercise }">
                   <ChevronDown :size="16" color="#9CA3AF" />
                 </view>
@@ -169,11 +161,7 @@
             <!-- 复查就诊建议 -->
             <view v-if="followUpPlan?.medicalAdvice" class="advice-section">
               <view class="advice-header advice-header--medical" @tap="toggleExpand('medical')">
-                <text class="advice-header-icon">🏥</text>
-                <text class="advice-header-title advice-header-title--medical">复查就诊建议</text>
-                <view class="advice-count">
-                  <text class="advice-count-text">{{ parseAdviceLines(followUpPlan.medicalAdvice).length }}条</text>
-                </view>
+                <text class="advice-header-title advice-header-title--medical">复查就诊建议（{{ parseAdviceLines(followUpPlan.medicalAdvice).length }}）</text>
                 <view class="advice-arrow" :class="{ 'advice-arrow--expanded': expandedMap.medical }">
                   <ChevronDown :size="16" color="#9CA3AF" />
                 </view>
@@ -189,8 +177,7 @@
             <!-- 降级：仅有 generalAdvice -->
             <view v-if="!hasStructuredAdvice && followUpPlan?.generalAdvice" class="advice-section">
               <view class="advice-header advice-header--diet" @tap="toggleExpand('general')">
-                <text class="advice-header-icon">💡</text>
-                <text class="advice-header-title advice-header-title--diet">健康建议</text>
+                <text class="advice-header-title advice-header-title--diet">健康建议（{{ parseAdviceLines(followUpPlan.generalAdvice).length }}）</text>
                 <view class="advice-arrow" :class="{ 'advice-arrow--expanded': expandedMap.general }">
                   <ChevronDown :size="16" color="#9CA3AF" />
                 </view>
@@ -205,8 +192,42 @@
 
             <!-- 无建议 -->
             <view v-if="!hasAdvice" class="empty-state">
-              <text class="empty-icon">💡</text>
               <text class="empty-text">暂无特殊健康建议，请保持良好生活习惯</text>
+            </view>
+          </template>
+
+          <!-- ====== Tab 3: 复查建议 ====== -->
+          <template v-if="activeTab === 'followup'">
+            <view v-for="(group, dept) in followUpGrouped" :key="dept" class="fu-dept-group">
+              <view class="fu-dept-header">
+                <view class="fu-dept-dot"></view>
+                <text class="fu-dept-name">{{ dept }}</text>
+                <text class="fu-dept-count">{{ group.length }}项</text>
+              </view>
+              <view class="fu-dept-items">
+                <view v-for="(item, idx) in group" :key="'fu-' + idx" class="fu-item">
+                  <view class="fu-item-top">
+                    <text class="fu-item-name">{{ item.name }}</text>
+                    <view v-if="item.registrationFee" class="fu-fee-tag" :class="fuFeeTagClass(item.feeType)">
+                      <text class="fu-fee-tag-text" :class="fuFeeTagTextClass(item.feeType)">{{ item.feeType || '普通号' }} ¥{{ item.registrationFee }}</text>
+                    </view>
+                    <view class="fu-time-tag">
+                      <text class="fu-time-tag-text">{{ item.suggestedTime }}</text>
+                    </view>
+                  </view>
+                  <view v-if="item.doctor" class="fu-doctor-row">
+                    <UserRound :size="12" color="#0D9488" />
+                    <text class="fu-doctor">{{ item.doctor }}</text>
+                  </view>
+                  <view class="fu-reason-toggle" @tap="toggleExpand('fu-' + dept + '-' + idx)">
+                    <text class="fu-reason-toggle-text">{{ expandedMap['fu-' + dept + '-' + idx] ? '收起原因' : '查看原因' }}</text>
+                    <ChevronDown :size="12" color="#9CA3AF" :class="{ 'fu-arrow-expanded': expandedMap['fu-' + dept + '-' + idx] }" />
+                  </view>
+                  <view v-if="expandedMap['fu-' + dept + '-' + idx]" class="fu-reason-wrap">
+                    <text class="fu-reason">{{ item.reason }}</text>
+                  </view>
+                </view>
+              </view>
             </view>
           </template>
 
@@ -229,8 +250,8 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, watch } from 'vue';
-import { ChevronDown, CalendarCheck } from 'lucide-vue-next';
-import type { FollowUpPlan } from '@/types/chat';
+import { ChevronDown, CalendarCheck, UserRound } from 'lucide-vue-next';
+import type { FollowUpPlan, FollowUpItem } from '@/types/chat';
 
 const props = defineProps<{
   visible: boolean;
@@ -244,12 +265,37 @@ defineEmits<{
 }>();
 
 // Tab 状态
-const activeTab = ref<'abnormal' | 'advice'>('abnormal');
+const activeTab = ref<'abnormal' | 'advice' | 'followup'>('abnormal');
 
-const tabs = computed(() => [
-  { key: 'abnormal' as const, label: '异常项分析', badge: props.followUpPlan?.followUpItems.length || 0 },
-  { key: 'advice' as const, label: '健康建议', badge: 0 },
-]);
+const adviceTotalCount = computed(() => {
+  const plan = props.followUpPlan;
+  if (!plan) return 0;
+  let count = 0;
+  if (plan.dietAdvice) count += parseAdviceLines(plan.dietAdvice).length;
+  if (plan.exerciseAdvice) count += parseAdviceLines(plan.exerciseAdvice).length;
+  if (plan.medicalAdvice) count += parseAdviceLines(plan.medicalAdvice).length;
+  if (!plan.dietAdvice && !plan.exerciseAdvice && !plan.medicalAdvice && plan.generalAdvice) {
+    count += parseAdviceLines(plan.generalAdvice).length;
+  }
+  return count;
+});
+
+const tabs = computed(() => {
+  const t: { key: 'abnormal' | 'advice' | 'followup'; label: string; badge: number }[] = [
+    { key: 'abnormal', label: '异常项分析', badge: props.followUpPlan?.followUpItems.length || 0 },
+    { key: 'advice', label: '健康建议', badge: adviceTotalCount.value },
+  ];
+  const recheckCount = (props.followUpPlan?.followUpItems || []).filter(i => i.type !== 'lifestyle').length;
+  if (recheckCount > 0) {
+    t.push({ key: 'followup', label: '复查建议', badge: recheckCount });
+  }
+  return t;
+});
+
+const tabIndex = computed(() => {
+  const idx = tabs.value.findIndex(t => t.key === activeTab.value);
+  return idx >= 0 ? idx : 0;
+});
 
 // 固定弹窗高度为 85vh，滚动区用 flex:1 自动填满
 const sheetHeight = computed(() => {
@@ -343,12 +389,17 @@ const hasAdvice = computed(() =>
   hasStructuredAdvice.value || !!props.followUpPlan?.generalAdvice,
 );
 
+/** 去除 emoji */
+function stripEmoji(str: string): string {
+  return str.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '').trim();
+}
+
 /** 解析建议文本为行列表，拆分重点和说明 */
 function parseAdviceLines(text: string): Array<{ highlight: string; detail: string }> {
   if (!text) return [];
   return text
     .split('\n')
-    .map((line) => line.replace(/^[•\-\*]\s*/, '').trim())
+    .map((line) => stripEmoji(line.replace(/^[•\-\*]\s*/, '').trim()))
     .filter(Boolean)
     .map((line) => {
       // 按 "——" 或 "—" 分割：前半为重点，后半为说明
@@ -365,6 +416,75 @@ function parseAdviceLines(text: string): Array<{ highlight: string; detail: stri
 const showBookBtn = computed(() =>
   !!(props.followUpPlan?.needFollowUp && (props.followUpPlan?.followUpItems.length || 0) > 0),
 );
+
+// ====== 复查建议 Tab ======
+
+/** 默认医生名映射 */
+const defaultDoctors: Record<string, string> = {
+  '心血管内科': '王建华 主任医师',
+  '呼吸科': '陈志强 副主任医师',
+  '呼吸内科': '陈志强 副主任医师',
+  '内分泌科': '李慧敏 主任医师',
+  '消化内科': '张国栋 副主任医师',
+  '肝病科': '刘文斌 主任医师',
+  '神经内科': '赵明辉 主任医师',
+  '骨科': '孙卫东 副主任医师',
+  '眼科': '吴丽华 主任医师',
+  '耳鼻喉科': '钱锋 副主任医师',
+  '检验科': '杨德明 主任医师',
+  '健康管理中心': '杨德明 主任医师',
+};
+
+/** 补充缺失的 doctor / registrationFee / feeType */
+const normalizedFollowUpItems = computed<FollowUpItem[]>(() => {
+  return (props.followUpPlan?.followUpItems || [])
+    .filter(i => i.type !== 'lifestyle')
+    .map((item) => {
+      const type = item.type || 'recheck';
+      const defaultFee = type === 'outpatient' ? 50 : 25;
+      const defaultFeeType = type === 'outpatient' ? '专家号' : '普通号';
+      let fallbackDoctor = defaultDoctors[item.department] || '';
+      if (!fallbackDoctor) {
+        for (const [key, val] of Object.entries(defaultDoctors)) {
+          if (item.department?.includes(key) || key.includes(item.department)) {
+            fallbackDoctor = val;
+            break;
+          }
+        }
+      }
+      if (!fallbackDoctor) fallbackDoctor = '专家门诊';
+      return {
+        ...item,
+        type,
+        doctor: item.doctor || fallbackDoctor,
+        registrationFee: typeof item.registrationFee === 'number' ? item.registrationFee : defaultFee,
+        feeType: item.feeType || (defaultFeeType as FollowUpItem['feeType']),
+      };
+    });
+});
+
+/** 按科室分组 */
+const followUpGrouped = computed(() => {
+  const map: Record<string, FollowUpItem[]> = {};
+  for (const item of normalizedFollowUpItems.value) {
+    const dept = item.department || '其他';
+    if (!map[dept]) map[dept] = [];
+    map[dept].push(item);
+  }
+  return map;
+});
+
+function fuFeeTagClass(feeType?: string): string {
+  if (feeType === '专家号') return 'fu-fee-tag--expert';
+  if (feeType === '特需号') return 'fu-fee-tag--special';
+  return 'fu-fee-tag--normal';
+}
+
+function fuFeeTagTextClass(feeType?: string): string {
+  if (feeType === '专家号') return 'fu-fee-tag-text--expert';
+  if (feeType === '特需号') return 'fu-fee-tag-text--special';
+  return 'fu-fee-tag-text--normal';
+}
 </script>
 
 <style lang="scss" scoped>
@@ -518,7 +638,7 @@ const showBookBtn = computed(() =>
 }
 
 .tab-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
@@ -782,16 +902,6 @@ const showBookBtn = computed(() =>
   &:active { opacity: 0.7; }
 }
 
-.advice-count {
-  margin-left: auto;
-}
-
-.advice-count-text {
-  font-size: 12px;
-  color: #9CA3AF;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
 .advice-arrow {
   transition: transform 0.25s ease;
   flex-shrink: 0;
@@ -818,14 +928,11 @@ const showBookBtn = computed(() =>
   border-bottom: 1px solid rgba(245, 158, 11, 0.08);
 }
 
-.advice-header-icon {
-  font-size: 16px;
-}
-
 .advice-header-title {
   font-size: 14px;
   font-weight: 700;
   font-family: "Noto Sans SC", sans-serif;
+  flex: 1;
 }
 
 .advice-header-title--diet { color: #0D9488; }
@@ -894,6 +1001,157 @@ const showBookBtn = computed(() =>
   font-size: 15px;
   font-weight: 600;
   color: #fff;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* ====== 复查建议 Tab ====== */
+.fu-dept-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fu-dept-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fu-dept-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: #0D9488;
+  box-shadow: 0 0 6px rgba(13, 148, 136, 0.3);
+  flex-shrink: 0;
+}
+
+.fu-dept-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #374151;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-dept-count {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-dept-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fu-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fu-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fu-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-fee-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.fu-fee-tag--normal {
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.15);
+}
+
+.fu-fee-tag--expert {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.fu-fee-tag--special {
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.15);
+}
+
+.fu-fee-tag-text {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-fee-tag-text--normal { color: #0D9488; }
+.fu-fee-tag-text--expert { color: #3B82F6; }
+.fu-fee-tag-text--special { color: #F97316; }
+
+.fu-time-tag {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.12);
+}
+
+.fu-time-tag-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0D9488;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-doctor-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fu-doctor {
+  font-size: 12px;
+  color: #0D9488;
+  font-weight: 500;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-reason-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fu-reason-toggle-text {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.fu-arrow-expanded {
+  transform: rotate(180deg);
+}
+
+.fu-reason-wrap {
+  padding: 0;
+}
+
+.fu-reason {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.7;
   font-family: "Noto Sans SC", sans-serif;
 }
 </style>

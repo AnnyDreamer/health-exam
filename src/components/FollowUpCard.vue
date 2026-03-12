@@ -1,36 +1,118 @@
 <template>
   <view class="followup-card">
-    <!-- 强提醒横幅 -->
-    <view v-if="plan.urgencyLevel === 'urgent'" class="alert-banner alert-banner--urgent">
-      <text class="alert-icon">⚠</text>
-      <text class="alert-text">建议2周内就医</text>
-    </view>
-    <view v-else-if="plan.urgencyLevel === 'soon'" class="alert-banner alert-banner--soon">
-      <text class="alert-icon">🔔</text>
-      <text class="alert-text">建议1-3个月内完成复查</text>
-    </view>
-
-    <!-- 头部：标题 + 紧急程度标签 -->
+    <!-- 头部 -->
     <view class="followup-head">
-      <text class="followup-title">复查方案</text>
+      <text class="followup-title">健康管理方案</text>
       <view class="urgency-badge" :class="urgencyClass">
         <text class="urgency-text">{{ urgencyLabel }}</text>
       </view>
     </view>
 
-    <!-- 复查项目分组展示 -->
-    <template v-if="plan.followUpItems.length > 0">
-      <!-- 饮食与运动方案 -->
-      <view v-if="lifestyleItems.length > 0" class="type-group">
-        <view class="type-group-header">
-          <view class="type-dot type-dot--lifestyle"></view>
-          <text class="type-group-title">饮食与运动方案</text>
+    <!-- Tab 栏 -->
+    <view v-if="tabs.length > 0" class="tab-bar">
+      <view
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="tab-item"
+        :class="{ 'tab-item--active': activeTab === tab.key }"
+        @tap="activeTab = tab.key"
+      >
+        <text class="tab-label" :class="{ 'tab-label--active': activeTab === tab.key }">{{ tab.label }}</text>
+      </view>
+    </view>
+
+    <!-- Tab 内容 -->
+    <view class="tab-content">
+      <!-- 风险分析 — 按高/中/低分组折叠 -->
+      <view v-if="activeTab === 'risk'" class="advice-panel">
+        <view v-for="group in riskGroups" :key="group.level" class="risk-group" :class="'risk-group--' + group.level">
+          <!-- 分组头 -->
+          <view class="risk-group-header" @tap="toggleRiskGroup(group.level)">
+            <view class="risk-dot" :class="'risk-dot--' + group.level"></view>
+            <text class="risk-group-label">{{ group.label }}</text>
+            <view class="risk-count-badge" :class="'risk-count-badge--' + group.level">
+              <text class="risk-count-text" :class="'risk-count-text--' + group.level">{{ group.items.length }}</text>
+            </view>
+            <text class="risk-arrow">{{ expandedRiskGroups[group.level] ? '▾' : '▸' }}</text>
+          </view>
+          <!-- 展开项目列表 -->
+          <view v-if="expandedRiskGroups[group.level]" class="risk-group-items">
+            <view v-for="(item, i) in group.items" :key="'r-' + group.level + '-' + i" class="risk-detail-item" :class="'risk-detail-item--' + group.level">
+              <view class="risk-detail-top">
+                <view class="risk-detail-num" :class="'risk-detail-num--' + group.level">
+                  <text class="risk-detail-num-text">{{ i + 1 }}</text>
+                </view>
+                <text class="risk-detail-name">{{ item.category }}</text>
+              </view>
+              <text v-if="item.brief" class="risk-detail-desc">{{ item.brief }}</text>
+              <view v-if="item.indicators.length > 0" class="risk-detail-tags">
+                <view v-for="(ind, j) in item.indicators" :key="'ri-' + i + '-' + j" class="risk-tag" :class="'risk-tag--' + group.level">
+                  <text class="risk-tag-text" :class="'risk-tag-text--' + group.level">{{ ind }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
         </view>
-        <view class="followup-items">
-          <view v-for="(item, index) in lifestyleItems" :key="'l-' + index" class="followup-item followup-item--lifestyle">
+      </view>
+
+      <!-- 健康建议（饮食 + 运动合并） -->
+      <view v-if="activeTab === 'daily'" class="advice-panel">
+        <view v-if="parsedDiet.length > 0" class="advice-card advice-card--diet">
+          <view class="advice-card-header advice-card-header--diet">
+            <text class="advice-card-title advice-card-title--diet">饮食注意事项（{{ parsedDiet.length }}）</text>
+          </view>
+          <view class="advice-card-body">
+            <view v-for="(line, i) in parsedDiet" :key="'d-' + i" class="advice-line">
+              <view class="advice-bullet advice-bullet--diet"></view>
+              <text class="advice-line-text">
+                <text v-if="line.highlight" class="advice-highlight">{{ line.highlight }}</text>
+                <text v-if="line.highlight && line.detail"> — </text>
+                <text class="advice-detail">{{ line.detail }}</text>
+              </text>
+            </view>
+          </view>
+        </view>
+        <view v-if="parsedExercise.length > 0" class="advice-card advice-card--exercise">
+          <view class="advice-card-header advice-card-header--exercise">
+            <text class="advice-card-title advice-card-title--exercise">运动建议（{{ parsedExercise.length }}）</text>
+          </view>
+          <view class="advice-card-body">
+            <view v-for="(line, i) in parsedExercise" :key="'e-' + i" class="advice-line">
+              <view class="advice-bullet advice-bullet--exercise"></view>
+              <text class="advice-line-text">
+                <text v-if="line.highlight" class="advice-highlight">{{ line.highlight }}</text>
+                <text v-if="line.highlight && line.detail"> — </text>
+                <text class="advice-detail">{{ line.detail }}</text>
+              </text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 复查就医 -->
+      <view v-if="activeTab === 'medical'" class="advice-panel">
+        <view v-if="parsedMedical.length > 0" class="advice-card advice-card--medical">
+          <view class="advice-card-header advice-card-header--medical">
+            <text class="advice-card-title advice-card-title--medical">复查就诊建议（{{ parsedMedical.length }}）</text>
+          </view>
+          <view class="advice-card-body">
+            <view v-for="(line, i) in parsedMedical" :key="'m-' + i" class="advice-line">
+              <view class="advice-bullet advice-bullet--medical"></view>
+              <text class="advice-line-text">
+                <text v-if="line.highlight" class="advice-highlight">{{ line.highlight }}</text>
+                <text v-if="line.highlight && line.detail"> — </text>
+                <text class="advice-detail">{{ line.detail }}</text>
+              </text>
+            </view>
+          </view>
+        </view>
+        <!-- 复查项目列表 -->
+        <view v-if="plan.followUpItems.length > 0" class="followup-items">
+          <view v-for="(item, index) in plan.followUpItems" :key="'fi-' + index" class="followup-item">
             <view class="item-header">
-              <view class="item-index item-index--lifestyle">{{ index + 1 }}</view>
+              <view class="item-index">{{ index + 1 }}</view>
               <text class="item-name">{{ item.name }}</text>
+              <text v-if="item.department" class="item-dept">{{ item.department }}</text>
             </view>
             <text class="item-reason">{{ item.reason }}</text>
             <view class="item-time-row">
@@ -41,75 +123,29 @@
         </view>
       </view>
 
-      <!-- 补充复查指标 -->
-      <view v-if="recheckItems.length > 0" class="type-group">
-        <view class="type-group-header">
-          <view class="type-dot type-dot--recheck"></view>
-          <text class="type-group-title">补充复查指标</text>
-        </view>
-        <view class="followup-items">
-          <view v-for="(item, index) in recheckItems" :key="'r-' + index" class="followup-item followup-item--recheck">
-            <view class="item-header">
-              <view class="item-index item-index--recheck">{{ index + 1 }}</view>
-              <text class="item-name">{{ item.name }}</text>
-              <text class="item-dept">{{ item.department }}</text>
-            </view>
-            <text class="item-reason">{{ item.reason }}</text>
-            <view class="item-time-row">
-              <text class="item-time-label">建议复查时间</text>
-              <text class="item-time-value">{{ item.suggestedTime }}</text>
+      <!-- 降级：仅 generalAdvice -->
+      <view v-if="activeTab === 'general'" class="advice-panel">
+        <view class="advice-card advice-card--diet">
+          <view class="advice-card-header advice-card-header--diet">
+            <text class="advice-card-title advice-card-title--diet">健康建议</text>
+          </view>
+          <view class="advice-card-body">
+            <view v-for="(line, i) in parsedGeneral" :key="'g-' + i" class="advice-line">
+              <view class="advice-bullet advice-bullet--diet"></view>
+              <text class="advice-line-text">
+                <text v-if="line.highlight" class="advice-highlight">{{ line.highlight }}</text>
+                <text v-if="line.highlight && line.detail"> — </text>
+                <text class="advice-detail">{{ line.detail }}</text>
+              </text>
             </view>
           </view>
         </view>
       </view>
+    </view>
 
-      <!-- 门诊就医方案 -->
-      <view v-if="outpatientItems.length > 0" class="type-group">
-        <view class="type-group-header">
-          <view class="type-dot type-dot--outpatient"></view>
-          <text class="type-group-title">门诊就医方案</text>
-        </view>
-        <view class="followup-items">
-          <view v-for="(item, index) in outpatientItems" :key="'o-' + index" class="followup-item followup-item--outpatient">
-            <view class="item-header">
-              <view class="item-index item-index--outpatient">{{ index + 1 }}</view>
-              <text class="item-name">{{ item.name }}</text>
-              <text class="item-dept">{{ item.department }}</text>
-            </view>
-            <text class="item-reason">{{ item.reason }}</text>
-            <view class="item-time-row">
-              <text class="item-time-label">建议就诊时间</text>
-              <text class="item-time-value">{{ item.suggestedTime }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
-    </template>
-
-    <!-- 无需复查 -->
-    <view v-else class="no-followup">
+    <!-- 无任何建议 -->
+    <view v-if="tabs.length === 0" class="no-followup">
       <text class="no-followup-text">各项指标正常，暂无需复查项目</text>
-    </view>
-
-    <!-- 健康建议三版块 -->
-    <view v-if="hasStructuredAdvice" class="advice-sections">
-      <view v-if="plan.dietAdvice" class="advice-card advice-card--diet">
-        <text class="advice-card-title advice-card-title--diet">🍽 饮食注意事项</text>
-        <text class="advice-card-text">{{ plan.dietAdvice }}</text>
-      </view>
-      <view v-if="plan.exerciseAdvice" class="advice-card advice-card--exercise">
-        <text class="advice-card-title advice-card-title--exercise">🏃 运动建议</text>
-        <text class="advice-card-text">{{ plan.exerciseAdvice }}</text>
-      </view>
-      <view v-if="plan.medicalAdvice" class="advice-card advice-card--medical">
-        <text class="advice-card-title advice-card-title--medical">🏥 复查就诊建议</text>
-        <text class="advice-card-text">{{ plan.medicalAdvice }}</text>
-      </view>
-    </view>
-    <!-- 降级：旧数据只有 generalAdvice -->
-    <view v-else-if="plan.generalAdvice" class="general-advice">
-      <text class="advice-label">健康建议</text>
-      <text class="advice-text">{{ plan.generalAdvice }}</text>
     </view>
 
     <!-- 操作按钮 -->
@@ -122,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { FollowUpPlan } from '@/types/chat';
 
 const props = defineProps<{
@@ -131,9 +167,14 @@ const props = defineProps<{
 
 defineEmits(['book']);
 
-const urgencyClass = computed(() => {
-  return `urgency-${props.plan.urgencyLevel}`;
-});
+const activeTab = ref('');
+
+interface TabItem {
+  key: string;
+  label: string;
+}
+
+const urgencyClass = computed(() => `urgency-${props.plan.urgencyLevel}`);
 
 const urgencyLabel = computed(() => {
   const map: Record<string, string> = {
@@ -144,23 +185,98 @@ const urgencyLabel = computed(() => {
   return map[props.plan.urgencyLevel] || '常规复查';
 });
 
-// 按 type 分组复查项目
-const lifestyleItems = computed(() =>
-  props.plan.followUpItems.filter((item) => item.type === 'lifestyle'),
-);
+/** 去除 emoji 字符 */
+function stripEmoji(str: string): string {
+  return str.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '').trim();
+}
 
-const recheckItems = computed(() =>
-  props.plan.followUpItems.filter((item) => !item.type || item.type === 'recheck'),
-);
+function parseAdviceLines(text: string): Array<{ highlight: string; detail: string }> {
+  if (!text) return [];
+  return text
+    .split('\n')
+    .map((line) => stripEmoji(line.replace(/^[•\-\*]\s*/, '').trim()))
+    .filter(Boolean)
+    .map((line) => {
+      const sep = line.indexOf('——') !== -1 ? '——' : line.indexOf('—') !== -1 ? '—' : null;
+      if (sep) {
+        const idx = line.indexOf(sep);
+        return { highlight: line.slice(0, idx).trim(), detail: line.slice(idx + sep.length).trim() };
+      }
+      return { highlight: '', detail: line };
+    });
+}
 
-const outpatientItems = computed(() =>
-  props.plan.followUpItems.filter((item) => item.type === 'outpatient'),
-);
+const parsedDiet = computed(() => parseAdviceLines(props.plan.dietAdvice || ''));
+const parsedExercise = computed(() => parseAdviceLines(props.plan.exerciseAdvice || ''));
+const parsedMedical = computed(() => parseAdviceLines(props.plan.medicalAdvice || ''));
+const parsedGeneral = computed(() => parseAdviceLines(props.plan.generalAdvice || ''));
 
-// 是否有结构化的健康建议
 const hasStructuredAdvice = computed(() =>
   !!(props.plan.dietAdvice || props.plan.exerciseAdvice || props.plan.medicalAdvice),
 );
+
+function riskLevelLabel(level: string): string {
+  const map: Record<string, string> = { high: '高风险', medium: '中风险', low: '低风险' };
+  return map[level] || '中风险';
+}
+
+/** 按高/中/低分组风险项 */
+interface RiskGroup {
+  level: 'high' | 'medium' | 'low';
+  label: string;
+  items: typeof props.plan.riskItems extends (infer T)[] | undefined ? NonNullable<T>[] : never[];
+}
+const riskGroups = computed<RiskGroup[]>(() => {
+  const all = props.plan.riskItems || [];
+  const order: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
+  const labels: Record<string, string> = { high: '高风险', medium: '中风险', low: '低风险' };
+  return order
+    .map(level => ({ level, label: labels[level], items: all.filter(i => i.level === level) }))
+    .filter(g => g.items.length > 0) as RiskGroup[];
+});
+
+/** 风险分组折叠状态 */
+const expandedRiskGroups = ref<Record<string, boolean>>({});
+function toggleRiskGroup(level: string) {
+  expandedRiskGroups.value[level] = !expandedRiskGroups.value[level];
+}
+// 默认展开所有风险分组
+watch(() => props.plan.riskItems, () => {
+  const groups = riskGroups.value;
+  if (groups.length > 0 && Object.keys(expandedRiskGroups.value).length === 0) {
+    for (const g of groups) {
+      expandedRiskGroups.value[g.level] = true;
+    }
+  }
+}, { immediate: true });
+
+// 动态构建 tab 列表（带条数）
+const tabs = computed<TabItem[]>(() => {
+  const list: TabItem[] = [];
+  if (props.plan.riskItems && props.plan.riskItems.length > 0) {
+    list.push({ key: 'risk', label: `风险分析（${props.plan.riskItems.length}）` });
+  }
+  if (hasStructuredAdvice.value) {
+    const dailyCount = parsedDiet.value.length + parsedExercise.value.length;
+    if (props.plan.dietAdvice || props.plan.exerciseAdvice) {
+      list.push({ key: 'daily', label: `健康建议（${dailyCount}）` });
+    }
+    const medicalCount = parsedMedical.value.length + props.plan.followUpItems.length;
+    if (props.plan.medicalAdvice || props.plan.followUpItems.length > 0) {
+      list.push({ key: 'medical', label: `复查就医（${medicalCount}）` });
+    }
+  } else if (props.plan.generalAdvice) {
+    list.push({ key: 'general', label: '健康建议' });
+  }
+  return list;
+});
+
+// 默认选中第一个 tab
+watch(tabs, (val) => {
+  if (val.length > 0 && !val.find(t => t.key === activeTab.value)) {
+    activeTab.value = val[0].key;
+  }
+}, { immediate: true });
 </script>
 
 <style lang="scss" scoped>
@@ -172,49 +288,11 @@ const hasStructuredAdvice = computed(() =>
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin-top: 6px;
 }
 
-/* 强提醒横幅 */
-.alert-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  margin-bottom: 2px;
-}
-
-.alert-banner--urgent {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.alert-banner--soon {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-}
-
-.alert-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.alert-text {
-  font-size: 13px;
-  font-weight: 700;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.alert-banner--urgent .alert-text {
-  color: #DC2626;
-}
-
-.alert-banner--soon .alert-text {
-  color: #D97706;
-}
-
+/* 头部 */
 .followup-head {
   display: flex;
   align-items: center;
@@ -222,37 +300,322 @@ const hasStructuredAdvice = computed(() =>
 }
 
 .followup-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: #1A1A1A;
   font-family: "Noto Sans SC", sans-serif;
 }
 
 .urgency-badge {
-  padding: 2px 10px;
+  padding: 3px 12px;
   border-radius: 8px;
 }
 
 .urgency-text {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: #fff;
   font-family: "Noto Sans SC", sans-serif;
 }
 
-/* 紧急程度颜色 */
-.urgency-normal {
-  background: #0D9488;
+.urgency-normal { background: #0D9488; }
+.urgency-soon { background: #F59E0B; }
+.urgency-urgent { background: #EF4444; }
+
+/* Tab 栏 — 匹配 ReportDrawer 样式 */
+.tab-bar {
+  display: flex;
+  background: rgba(13, 148, 136, 0.08);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(13, 148, 136, 0.15);
+  border-radius: 14px;
+  padding: 4px;
 }
 
-.urgency-soon {
-  background: #F59E0B;
+.tab-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 0;
+  border-radius: 11px;
+  transition: all 0.25s ease;
 }
 
-.urgency-urgent {
-  background: #EF4444;
+.tab-item--active {
+  background: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.12);
 }
 
+.tab-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9CA3AF;
+  font-family: "Noto Sans SC", sans-serif;
+  transition: color 0.25s;
+}
+
+.tab-label--active {
+  color: #0D9488;
+}
+
+/* Tab 内容 */
+.tab-content {
+  min-height: 40px;
+}
+
+.advice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ============================================================
+   建议卡片 — 匹配设计稿的 accordion 风格
+   ============================================================ */
+.advice-card {
+  border-radius: 12px;
+  background: #FFFFFF;
+  border: 1px solid rgba(229, 231, 235, 0.37);
+  overflow: hidden;
+}
+
+.advice-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.advice-card-header--diet {
+  background: linear-gradient(90deg, #F0FDFA 0%, #FFFFFF 100%);
+}
+
+.advice-card-header--exercise {
+  background: linear-gradient(90deg, #EFF6FF 0%, #FFFFFF 100%);
+}
+
+.advice-card-header--medical {
+  background: linear-gradient(90deg, #FFF7ED 0%, #FFFFFF 100%);
+}
+
+.advice-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: "Noto Sans SC", sans-serif;
+  flex: 1;
+}
+
+.advice-card-title--diet { color: #0D9488; }
+.advice-card-title--exercise { color: #3B82F6; }
+.advice-card-title--medical { color: #B45309; }
+
+
+.advice-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.advice-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.advice-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.advice-bullet--diet { background: #0D9488; }
+.advice-bullet--exercise { background: #3B82F6; }
+.advice-bullet--medical { background: #F59E0B; }
+
+.advice-line-text {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+  font-family: "Noto Sans SC", sans-serif;
+  flex: 1;
+}
+
+.advice-highlight {
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+.advice-detail {
+  color: #6B7280;
+}
+
+/* ============================================================
+   风险分析 — 匹配设计稿分组折叠卡片
+   ============================================================ */
+.risk-group {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.risk-group--high {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.12);
+}
+.risk-group--medium {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.12);
+}
+.risk-group--low {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
+
+.risk-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.risk-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.risk-dot--high { background: #EF4444; }
+.risk-dot--medium { background: #F59E0B; }
+.risk-dot--low { background: #10B981; }
+
+.risk-group-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+  flex: 1;
+}
+
+.risk-count-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.risk-count-badge--high { background: rgba(239, 68, 68, 0.08); }
+.risk-count-badge--medium { background: rgba(245, 158, 11, 0.08); }
+.risk-count-badge--low { background: rgba(16, 185, 129, 0.08); }
+
+.risk-count-text {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "DM Sans", sans-serif;
+}
+
+.risk-count-text--high { color: #EF4444; }
+.risk-count-text--medium { color: #F59E0B; }
+.risk-count-text--low { color: #10B981; }
+
+.risk-arrow {
+  font-size: 12px;
+  color: #9CA3AF;
+  flex-shrink: 0;
+  font-family: "Inter", sans-serif;
+}
+
+.risk-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+/* 展开项 */
+.risk-detail-item {
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.risk-detail-item--high { background: rgba(239, 68, 68, 0.04); }
+.risk-detail-item--medium { background: rgba(245, 158, 11, 0.04); }
+.risk-detail-item--low { background: rgba(16, 185, 129, 0.04); }
+
+.risk-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.risk-detail-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.risk-detail-num--high { background: #EF4444; }
+.risk-detail-num--medium { background: #F59E0B; }
+.risk-detail-num--low { background: #10B981; }
+
+.risk-detail-num-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-family: "DM Sans", sans-serif;
+}
+
+.risk-detail-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A1A;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-detail-desc {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.5;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.risk-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.risk-tag {
+  padding: 3px 0;
+}
+
+.risk-tag-text {
+  font-size: 11px;
+  font-weight: 500;
+  font-family: "DM Sans", "Noto Sans SC", sans-serif;
+}
+
+.risk-tag-text--high { color: #DC2626; }
+.risk-tag-text--medium { color: #B45309; }
+.risk-tag-text--low { color: #059669; }
+
+/* ============================================================
+   复查项目列表
+   ============================================================ */
 .followup-items {
   display: flex;
   flex-direction: column;
@@ -260,9 +623,8 @@ const hasStructuredAdvice = computed(() =>
 }
 
 .followup-item {
-  background: rgba(255, 255, 255, 0.47);
-  border: 1px solid rgba(255, 255, 255, 0.31);
-  backdrop-filter: blur(12px);
+  background: #FFFFFF;
+  border: 1px solid rgba(229, 231, 235, 0.37);
   border-radius: 12px;
   padding: 12px;
   display: flex;
@@ -277,13 +639,13 @@ const hasStructuredAdvice = computed(() =>
 }
 
 .item-index {
-  width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  background: #0D9488;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: #F59E0B;
   color: #fff;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   font-family: "DM Sans", sans-serif;
   display: flex;
   align-items: center;
@@ -293,7 +655,7 @@ const hasStructuredAdvice = computed(() =>
 
 .item-name {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: #1A1A1A;
   font-family: "Noto Sans SC", sans-serif;
   flex: 1;
@@ -304,9 +666,10 @@ const hasStructuredAdvice = computed(() =>
   color: #0D9488;
   font-family: "Noto Sans SC", sans-serif;
   background: rgba(13, 148, 136, 0.08);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
 .item-reason {
@@ -314,14 +677,14 @@ const hasStructuredAdvice = computed(() =>
   color: #6B7280;
   line-height: 1.5;
   font-family: "Noto Sans SC", sans-serif;
-  padding-left: 28px;
+  padding-left: 30px;
 }
 
 .item-time-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: 28px;
+  padding-left: 30px;
 }
 
 .item-time-label {
@@ -332,48 +695,14 @@ const hasStructuredAdvice = computed(() =>
 
 .item-time-value {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #0D9488;
   font-family: "Noto Sans SC", sans-serif;
 }
 
-/* 类型分组 */
-.type-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.type-group-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.type-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.type-dot--lifestyle { background: #10B981; }
-.type-dot--recheck { background: #3B82F6; }
-.type-dot--outpatient { background: #F59E0B; }
-
-.type-group-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #374151;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.item-index--lifestyle { background: #10B981; }
-.item-index--recheck { background: #3B82F6; }
-.item-index--outpatient { background: #F59E0B; }
-
+/* 无需复查 */
 .no-followup {
-  padding: 16px 0;
+  padding: 12px 0;
   text-align: center;
 }
 
@@ -383,77 +712,7 @@ const hasStructuredAdvice = computed(() =>
   font-family: "Noto Sans SC", sans-serif;
 }
 
-/* 健康建议三版块 */
-.advice-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.advice-card {
-  border-radius: 10px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.advice-card--diet {
-  background: rgba(13, 148, 136, 0.06);
-  border-left: 3px solid #0D9488;
-}
-
-.advice-card--exercise {
-  background: rgba(59, 130, 246, 0.06);
-  border-left: 3px solid #3B82F6;
-}
-
-.advice-card--medical {
-  background: rgba(245, 158, 11, 0.06);
-  border-left: 3px solid #F59E0B;
-}
-
-.advice-card-title {
-  font-size: 12px;
-  font-weight: 700;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.advice-card-title--diet { color: #0D9488; }
-.advice-card-title--exercise { color: #3B82F6; }
-.advice-card-title--medical { color: #D97706; }
-
-.advice-card-text {
-  font-size: 12px;
-  color: #374151;
-  line-height: 1.6;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-/* 旧版降级样式 */
-.general-advice {
-  background: rgba(13, 148, 136, 0.04);
-  border-radius: 10px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.advice-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #0D9488;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
-.advice-text {
-  font-size: 12px;
-  color: #374151;
-  line-height: 1.6;
-  font-family: "Noto Sans SC", sans-serif;
-}
-
+/* 操作按钮 */
 .followup-actions {
   display: flex;
   justify-content: flex-end;
