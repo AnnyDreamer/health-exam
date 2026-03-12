@@ -114,6 +114,7 @@ JSON 格式：
       "department": "相关科室",
       "doctor": "推荐就诊医生姓名+职称（如'张主任/主任医师'），根据科室合理虚拟一位专家",
       "type": "lifestyle" | "recheck" | "outpatient",
+      "typeReason": "为什么走这个就医路径的一句话说明",
       "registrationFee": 挂号费(整数元。recheck: 25; outpatient: 50或200; lifestyle: 0),
       "feeType": "普通号" | "专家号" | "特需号"
     }
@@ -127,10 +128,11 @@ urgencyLevel 判断：
 - "normal"：仅轻微异常或全部正常
 - 报告提到"高风险"→ 至少 "soon"；建议就医 → "urgent"
 
-followUpItems type：
+followUpItems type + typeReason：
 - "lifestyle": 生活方式干预（饮食、运动、作息）
-- "recheck": 需复查的检验检查项目
-- "outpatient": 需门诊就医的科室
+- "recheck": 需复查的检验检查项目，department 统一填"健康体检中心"（体检复查不需要具体临床科室）。typeReason 说明为什么体检复查即可（如"指标轻度偏离，定期监测即可"）
+- "outpatient": 需门诊就医的科室，department 填具体临床科室（如"内分泌科""心内科"）。typeReason 说明为什么需要挂号看门诊（如"指标明显异常，需医生面诊评估用药方案"）
+- typeReason 必须让患者理解为什么这项走门诊而不是体检（或反之），不超过25字
 - 只列异常项，正常项不列
 - 全部正常时 needFollowUp=false, followUpItems=[]`;
 
@@ -185,6 +187,7 @@ JSON 格式：
       "department": "相关科室",
       "doctor": "推荐医生姓名+职称",
       "type": "lifestyle" | "recheck" | "outpatient",
+      "typeReason": "为什么走这个就医路径的一句话说明",
       "registrationFee": 25,
       "feeType": "普通号" | "专家号" | "特需号"
     }
@@ -206,10 +209,11 @@ urgencyLevel 判断：
 - "soon"：存在 recheck 项目或 ≥3项异常
 - "normal"：仅轻微异常或全部正常
 
-followUpItems type / registrationFee / feeType：
+followUpItems type / typeReason / registrationFee / feeType：
 - "lifestyle": 生活方式干预，registrationFee=0
-- "recheck": 复查项目，registrationFee=25，feeType="普通号"
-- "outpatient": 门诊就医，registrationFee=50或200，feeType="专家号"或"特需号"`;
+- "recheck": 复查项目，department 统一填"健康体检中心"，registrationFee=25，feeType="普通号"。typeReason 说明为什么体检复查即可（如"指标轻度偏离，定期监测即可"）
+- "outpatient": 门诊就医，department 填具体临床科室（如"内分泌科"），registrationFee=50或200，feeType="专家号"或"特需号"。typeReason 说明为什么需要挂号看门诊（如"指标明显异常，需医生面诊评估用药方案"）
+- typeReason 必须让患者理解为什么这项走门诊而不是体检（或反之），不超过25字`;
 
 /** 套餐推荐系统提示词（流式版：先输出推荐理由文字，再输出 JSON） */
 const PACKAGE_SYSTEM_PROMPT = `你是一位专业的体检套餐推荐AI助手。请根据用户信息推荐个性化的体检套餐。

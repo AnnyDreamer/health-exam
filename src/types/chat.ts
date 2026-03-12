@@ -67,6 +67,7 @@ export interface FollowUpItem {
   suggestedTime: string;
   department: string;
   type?: 'lifestyle' | 'recheck' | 'outpatient';
+  typeReason?: string;
   doctor?: string;
   registrationFee?: number;
   feeType?: '普通号' | '专家号' | '特需号';

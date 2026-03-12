@@ -315,7 +315,7 @@ const normalizedItems = computed<FollowUpItem[]>(() => {
 const groupedItems = computed(() => {
   const map: Record<string, FollowUpItem[]> = {};
   for (const item of normalizedItems.value) {
-    const dept = item.department || '其他';
+    const dept = (item.type === 'recheck' || !item.type) ? '健康体检中心' : (item.department || '其他');
     if (!map[dept]) map[dept] = [];
     map[dept].push(item);
   }

@@ -303,7 +303,7 @@
                       <text class="risk-level-text">低风险 {{ getRiskCount(msg.followUpPlan, 'low') }}项</text>
                     </view>
                   </view>
-                  <text class="risk-summary-text">{{ msg.content }}</text>
+                  <text class="risk-summary-text">已为您解读体检报告，共发现<text class="risk-highlight">{{ msg.followUpPlan?.riskItems?.length || 0 }}项异常</text>，包含<text class="risk-highlight">{{ getRiskSummaryParts(msg.followUpPlan!) }}</text>，点击查看详情。</text>
                   <view class="risk-summary-btn">
                     <text class="risk-summary-btn-text">查看解读详情</text>
                   </view>
@@ -331,7 +331,7 @@
                       <text class="risk-level-text">低风险 {{ getRiskCount(msg.followUpPlan, 'low') }}项</text>
                     </view>
                   </view>
-                  <text class="risk-summary-text">{{ msg.content }}</text>
+                  <text class="risk-summary-text">已为您生成健康风险报告，共发现<text class="risk-highlight">{{ msg.followUpPlan.riskItems?.length || 0 }}项风险</text>，包含<text class="risk-highlight">{{ getRiskSummaryParts(msg.followUpPlan) }}</text>，点击查看详情。</text>
                   <view class="risk-summary-btn">
                     <text class="risk-summary-btn-text">查看健康管理方案</text>
                   </view>
@@ -470,12 +470,13 @@
           <FollowUpCard
             :plan="riskDetailPlan"
             @book="handleRiskDetailBook"
+            @subtab-change="(v: string) => riskMedSubTab = v"
           />
         </scroll-view>
         <view class="risk-popup-bottom" @touchmove.prevent>
           <view v-if="riskDetailPlan?.needFollowUp && riskDetailPlan?.followUpItems?.length" class="risk-popup-buttons">
             <view class="risk-popup-btn-primary" @tap="handleRiskDetailBook">
-              <text class="risk-popup-btn-primary-text">预约复查</text>
+              <text class="risk-popup-btn-primary-text">{{ riskMedSubTab === 'outpatient' ? '预约挂号' : '预约体检' }}</text>
             </view>
             <view class="risk-popup-btn-secondary" @tap="navigateToMakePackage">
               <text class="risk-popup-btn-secondary-text">制定体检方案</text>
@@ -677,6 +678,7 @@ const pendingFollowUpPlan = ref<FollowUpPlan | null>(null);
 // 风险分析详情弹窗
 const showRiskDetail = ref(false);
 const riskDetailPlan = ref<FollowUpPlan | null>(null);
+const riskMedSubTab = ref('outpatient');
 
 // 滚动相关
 const scrollPosition = ref(0);
@@ -804,6 +806,17 @@ function getRiskCount(plan: FollowUpPlan, level: string): number {
   return plan.riskItems?.filter(r => r.level === level).length || 0;
 }
 
+function getRiskSummaryParts(plan: FollowUpPlan): string {
+  const parts: string[] = [];
+  if (plan.dietAdvice) parts.push('饮食调整');
+  if (plan.exerciseAdvice) parts.push('运动指导');
+  const outCount = plan.followUpItems.filter(i => i.type === 'outpatient').length;
+  const reCount = plan.followUpItems.filter(i => i.type !== 'outpatient').length;
+  if (outCount > 0) parts.push(`${outCount}项门诊就医`);
+  if (reCount > 0) parts.push(`${reCount}项体检复查`);
+  return parts.join('、') || '健康建议';
+}
+
 function openRiskDetail(plan: FollowUpPlan) {
   riskDetailPlan.value = plan;
   showRiskDetail.value = true;
@@ -857,7 +870,15 @@ async function handleSendPdf(payload: { base64: string; fileName: string }) {
 
 function handleRiskDetailBook() {
   showRiskDetail.value = false;
-  handleFollowUpBook(riskDetailPlan.value || undefined);
+  if (!riskDetailPlan.value) return;
+  // 按当前子 tab 过滤项目
+  const filtered: FollowUpPlan = {
+    ...riskDetailPlan.value,
+    followUpItems: riskDetailPlan.value.followUpItems.filter(i =>
+      riskMedSubTab.value === 'outpatient' ? i.type === 'outpatient' : i.type !== 'outpatient',
+    ),
+  };
+  handleFollowUpBook(filtered);
 }
 
 function navigateToMakePackage() {
@@ -884,9 +905,17 @@ function openReportDrawer(msg: ChatMessage) {
   showReportDrawer.value = true;
 }
 
-function handleReportBook() {
+function handleReportBook(subTab?: string) {
   showReportDrawer.value = false;
-  handleFollowUpBook(drawerFollowUpPlan.value || undefined);
+  if (!drawerFollowUpPlan.value) return;
+  const tab = subTab || 'outpatient';
+  const filtered: FollowUpPlan = {
+    ...drawerFollowUpPlan.value,
+    followUpItems: drawerFollowUpPlan.value.followUpItems.filter(i =>
+      tab === 'outpatient' ? i.type === 'outpatient' : i.type !== 'outpatient',
+    ),
+  };
+  handleFollowUpBook(filtered);
 }
 
 function handleFollowUpConfirm(data: { selectedItems: import('@/types/chat').FollowUpItem[]; date: string; time: string; totalRegistrationFee: number }) {
@@ -2970,5 +2999,11 @@ onShow(() => {
   font-size: 11px;
   color: #9CA3AF;
   font-family: "Noto Sans SC", sans-serif;
+}
+
+/* 风险摘要高亮文字 */
+.risk-highlight {
+  font-weight: 700;
+  color: #0D9488;
 }
 </style>

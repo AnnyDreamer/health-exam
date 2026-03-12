@@ -29,10 +29,7 @@
           <!-- 分组头 -->
           <view class="risk-group-header" @tap="toggleRiskGroup(group.level)">
             <view class="risk-dot" :class="'risk-dot--' + group.level"></view>
-            <text class="risk-group-label">{{ group.label }}</text>
-            <view class="risk-count-badge" :class="'risk-count-badge--' + group.level">
-              <text class="risk-count-text" :class="'risk-count-text--' + group.level">{{ group.items.length }}</text>
-            </view>
+            <text class="risk-group-label">{{ group.label }}（{{ group.items.length }}）</text>
             <text class="risk-arrow">{{ expandedRiskGroups[group.level] ? '▾' : '▸' }}</text>
           </view>
           <!-- 展开项目列表 -->
@@ -91,6 +88,10 @@
 
       <!-- 复查就医 -->
       <view v-if="activeTab === 'medical'" class="advice-panel">
+        <view class="medical-hint">
+          <text class="medical-hint-icon">&#9888;</text>
+          <text class="medical-hint-text">根据您的健康风险，按照轻重程度区分<text class="medical-hint-outpatient">门诊就医</text>和<text class="medical-hint-recheck">体检复查</text>路径</text>
+        </view>
         <!-- 门诊/体检 子 tab -->
         <view class="fu-sub-tabs">
           <view class="fu-sub-tab" :class="{ 'fu-sub-tab--active': medSubTab === 'outpatient' }" @tap="medSubTab = 'outpatient'">
@@ -115,20 +116,17 @@
             <view class="followup-items">
               <view v-for="(item, idx) in group" :key="'op-' + idx" class="followup-item">
                 <view class="item-header">
-                  <view class="item-index item-index--outpatient">{{ idx + 1 }}</view>
                   <text class="item-name">{{ item.name }}</text>
                   <text v-if="item.feeType" class="item-fee-tag">{{ item.feeType }} ¥{{ item.registrationFee || 50 }}</text>
                 </view>
-                <view class="item-time-row">
-                  <text class="item-time-label">建议就诊时间</text>
+                <view class="item-meta-row">
+                  <text v-if="item.doctor" class="item-doctor">{{ item.doctor }}</text>
+                  <text v-if="item.doctor" class="item-meta-sep">|</text>
+                  <text class="item-time-label">建议就诊</text>
                   <text class="item-time-value">{{ item.suggestedTime }}</text>
                 </view>
-                <view v-if="item.doctor" class="item-doctor-row">
-                  <text class="item-doctor">{{ item.doctor }}</text>
-                </view>
-                <view class="item-ai-reason">
-                  <text class="item-ai-reason-label">AI推荐：</text>
-                  <text class="item-ai-reason-text">{{ item.reason }}</text>
+                <view class="item-type-reason item-type-reason--outpatient">
+                  <text class="item-type-reason-text">需门诊就医：{{ getTypeReason(item) }}</text>
                 </view>
               </view>
             </view>
@@ -143,17 +141,16 @@
           <view class="followup-items">
             <view v-for="(item, idx) in recheckOnlyItems" :key="'rc-' + idx" class="followup-item followup-item--recheck">
               <view class="item-header">
-                <view class="item-index">{{ idx + 1 }}</view>
                 <text class="item-name">{{ item.name }}</text>
               </view>
-              <text v-if="item.department" class="item-dept">{{ item.department }}</text>
-              <view class="item-time-row">
+              <view class="item-meta-row">
+                <text class="item-dept">健康体检中心</text>
+                <text class="item-meta-sep">|</text>
                 <text class="item-time-label">建议时间</text>
                 <text class="item-time-value">{{ item.suggestedTime }}</text>
               </view>
-              <view class="item-ai-reason">
-                <text class="item-ai-reason-label">AI推荐：</text>
-                <text class="item-ai-reason-text">{{ item.reason }}</text>
+              <view class="item-type-reason item-type-reason--recheck">
+                <text class="item-type-reason-text">体检复查即可：{{ getTypeReason(item) }}</text>
               </view>
             </view>
           </view>
@@ -202,7 +199,7 @@ const props = defineProps<{
   plan: FollowUpPlan;
 }>();
 
-defineEmits(['book']);
+const emit = defineEmits(['book', 'subtab-change']);
 
 const activeTab = ref('');
 
@@ -213,6 +210,15 @@ interface TabItem {
 
 /** 门诊/体检 子 tab */
 const medSubTab = ref<'outpatient' | 'recheck'>('outpatient');
+
+/** 根据 type 生成就医路径说明，优先用 typeReason，否则用 reason 拼接 */
+function getTypeReason(item: typeof props.plan.followUpItems[number]): string {
+  if (item.typeReason) return item.typeReason;
+  // 用 reason 内容拼出有意义的说明
+  const brief = item.reason || item.name;
+  if (item.type === 'outpatient') return `${brief}，需医生面诊评估`;
+  return `${brief}，定期监测即可`;
+}
 
 const outpatientItems = computed(() =>
   props.plan.followUpItems.filter(i => i.type === 'outpatient'),
@@ -236,6 +242,11 @@ watch(() => props.plan.followUpItems, () => {
   const hasRe = recheckOnlyItems.value.length > 0;
   if (!hasOut && hasRe) medSubTab.value = 'recheck';
   else medSubTab.value = 'outpatient';
+}, { immediate: true });
+
+// 子 tab 切换时通知父组件
+watch(medSubTab, (val) => {
+  emit('subtab-change', val);
 }, { immediate: true });
 
 const urgencyClass = computed(() => `urgency-${props.plan.urgencyLevel}`);
@@ -744,11 +755,17 @@ watch(tabs, (val) => {
   padding-left: 30px;
 }
 
+.item-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .item-time-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: 30px;
 }
 
 .item-time-label {
@@ -764,6 +781,11 @@ watch(tabs, (val) => {
   font-family: "Noto Sans SC", sans-serif;
 }
 
+.item-meta-sep {
+  font-size: 11px;
+  color: #D1D5DB;
+}
+
 /* 无需复查 */
 .no-followup {
   padding: 12px 0;
@@ -774,6 +796,40 @@ watch(tabs, (val) => {
   font-size: 13px;
   color: #0D9488;
   font-family: "Noto Sans SC", sans-serif;
+}
+
+.medical-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.medical-hint-icon {
+  font-size: 14px;
+  color: #F59E0B;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.medical-hint-text {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.5;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.medical-hint-outpatient {
+  font-weight: 700;
+  color: #EF4444;
+}
+
+.medical-hint-recheck {
+  font-weight: 700;
+  color: #0D9488;
 }
 
 /* 门诊/体检 二级 Tab（下划线风格） */
@@ -867,13 +923,6 @@ watch(tabs, (val) => {
   font-family: "Noto Sans SC", sans-serif;
 }
 
-.item-doctor-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 30px;
-}
-
 .item-doctor {
   font-size: 12px;
   color: #0D9488;
@@ -883,6 +932,34 @@ watch(tabs, (val) => {
 
 .followup-item--recheck {
   border-left: 3px solid rgba(13, 148, 136, 0.3);
+}
+
+/* 就医路径说明 */
+.item-type-reason {
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.item-type-reason--outpatient {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.item-type-reason--recheck {
+  background: rgba(13, 148, 136, 0.06);
+}
+
+.item-type-reason-text {
+  font-size: 12px;
+  font-family: "Noto Sans SC", sans-serif;
+  line-height: 1.5;
+}
+
+.item-type-reason--outpatient .item-type-reason-text {
+  color: #DC2626;
+}
+
+.item-type-reason--recheck .item-type-reason-text {
+  color: #0D9488;
 }
 
 /* AI 推荐理由 */

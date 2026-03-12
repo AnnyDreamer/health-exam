@@ -531,7 +531,7 @@ export class ChatOrchestrator {
     this.conversationHistory = [{ role: 'user', content: initialPrompt }];
 
     // 本地打字机确认（不经过 AI，确保不会提前分析数据）
-    await this._typewriterMessage(`收到，${name}，我将检索您的就诊记录和体检报告，为您生成健康风险分析报告。`);
+    const ackMsgId = await this._typewriterMessage(`收到，${name}，我将检索您的就诊记录和体检报告，为您生成健康风险分析报告。`);
 
     // 显示风险分析加载卡片（带进度动画）
     const loadingMsgId = this.store.addMessage({
@@ -547,19 +547,14 @@ export class ChatOrchestrator {
     await this._callWithTools(tools, toolChoice, RISK_TOOL_PROMPT, { maxTokens: 4000, skipTyping: true, skipTextOutput: true });
     this.aiTurnCount++;
 
-    // 更新卡片：loading → 真实数据
+    // 更新卡片：loading → 真实数据，移除过渡语
     if (this.lastFollowUpPlan) {
-      const plan = this.lastFollowUpPlan;
-      const riskCount = plan.riskItems?.length || 0;
-      const parts: string[] = [];
-      if (plan.dietAdvice) parts.push('饮食调整');
-      if (plan.exerciseAdvice) parts.push('运动指导');
-      if (plan.followUpItems?.length) parts.push(`${plan.followUpItems.length}项复查建议`);
-      if (plan.medicalAdvice) parts.push('就医指导');
-      const detailParts = parts.length > 0 ? `，包含${parts.join('、')}` : '';
-      const cardDesc = `已为您生成健康风险报告，共发现${riskCount}项风险${detailParts}，点击查看详情。`;
+      // 移除过渡语
+      const ackIdx = this.store.messages.findIndex(m => m.id === ackMsgId);
+      if (ackIdx !== -1) this.store.messages.splice(ackIdx, 1);
+
       this.store.updateMessage(loadingMsgId, {
-        content: cardDesc,
+        content: '',
         contentType: 'risk-summary',
         followUpPlan: this.lastFollowUpPlan,
         planGenerating: false,
