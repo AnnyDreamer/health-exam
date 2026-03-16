@@ -1,5 +1,14 @@
 <template>
   <view class="health-card">
+    <!-- 体检报告通知横幅 -->
+    <view class="report-banner" @tap="goExamReport">
+      <view class="report-banner-icon">
+        <FileText :size="18" color="#0D9488" />
+      </view>
+      <text class="report-banner-text">您有一份体检报告待查看</text>
+      <ChevronRight :size="14" color="#0D9488" />
+    </view>
+
     <!-- 评分行：圆环左 + 信息右，点击跳转报告 -->
     <view class="score-row" @tap="$emit('viewReport')">
       <view class="score-ring-wrapper">
@@ -87,7 +96,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ShieldAlert, ClipboardList, FileSearch, ChevronRight } from 'lucide-vue-next';
+import { ShieldAlert, ClipboardList, FileSearch, FileText, ChevronRight } from 'lucide-vue-next';
 import type { HealthIndicator } from '@/types/health';
 
 const props = defineProps<{
@@ -99,6 +108,10 @@ const props = defineProps<{
 }>();
 
 defineEmits(['viewRisk', 'makePackage', 'viewReport', 'interpretReport']);
+
+function goExamReport() {
+  uni.navigateTo({ url: '/pages/report/exam-report' });
+}
 
 const MAX_ABNORMAL_DISPLAY = 4;
 
@@ -153,6 +166,41 @@ const ringTrackColor = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ---- 体检报告通知横幅 ---- */
+.report-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(240, 253, 250, 0.72);
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 8px rgba(13, 148, 136, 0.08);
+
+  &:active { background: rgba(240, 253, 250, 0.9); }
+}
+
+.report-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(13, 148, 136, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.report-banner-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0F766E;
+  font-family: "Noto Sans SC", sans-serif;
+  line-height: 1.4;
 }
 
 /* ---- 评分行 ---- */

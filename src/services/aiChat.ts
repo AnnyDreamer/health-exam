@@ -429,6 +429,25 @@ export async function interpretPdfReport(
   return qwenDocStream(pdfBase64, `${PDF_REPORT_SYSTEM_PROMPT}\n\n${prompt}`, onChunk, fileName);
 }
 
+/**
+ * 纯文本健康数据解读（非流式）
+ *
+ * 与 interpretReport（图片解读）输出格式一致，但输入改为纯文本健康数据。
+ *
+ * @param healthInfo - _formatHealthDataForAI() 生成的文本
+ * @returns 完整的 AI 解读文本
+ */
+export async function interpretHealthData(healthInfo: string): Promise<string> {
+  const response = await qwenChat(
+    [
+      { role: 'system', content: REPORT_SYSTEM_PROMPT },
+      { role: 'user', content: `以下是用户的体检数据，请详细解读：\n\n${healthInfo}` },
+    ],
+    { temperature: 0.3, maxTokens: 3000 },
+  );
+  return response.choices?.[0]?.message?.content || '';
+}
+
 /** 解析 AI 返回的 JSON 字符串 */
 function parseAIJson<T>(content: string): T {
   const jsonStr = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/, '');

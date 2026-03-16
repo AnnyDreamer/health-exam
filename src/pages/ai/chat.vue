@@ -412,6 +412,14 @@
       <ChatInput v-if="currentTab === 'ai'" @send="handleSend" @send-image="handleSendImage" @send-pdf="handleSendPdf" />
     </template>
 
+    <ExamReportNotify
+      :visible="showExamNotify"
+      :indicators="healthStore.indicators"
+      :last-date="healthStore.healthData?.lastCheckDate || ''"
+      @close="showExamNotify = false"
+      @view="showExamNotify = false; uni.navigateTo({ url: '/pages/report/exam-report' })"
+    />
+
     <PendingPopup
       :visible="showPending"
       :company-name="userStore.userInfo?.companyName || ''"
@@ -595,7 +603,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch, reactive } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user';
 import { usePackageStore } from '@/stores/package';
@@ -620,6 +628,7 @@ import DateTimePicker from '@/components/DateTimePicker.vue';
 import PaymentPopup from '@/components/PaymentPopup.vue';
 import PackageDetailPopup from '@/components/PackageDetailPopup.vue';
 import ReportDrawer from '@/components/ReportDrawer.vue';
+import ExamReportNotify from '@/components/ExamReportNotify.vue';
 import FollowUpBookingPopup from '@/components/FollowUpBookingPopup.vue';
 import HealthRecordView from '@/components/HealthRecordView.vue';
 import ProfileView from '@/components/ProfileView.vue';
@@ -647,6 +656,7 @@ const tabs = [
 
 const showChat = ref(false);
 const showPending = ref(false);
+const showExamNotify = ref(false);
 const drawerVisible = ref(false);
 const sessionList = computed(() => chatStore.getSessionList());
 const scrollToId = ref('');
@@ -748,6 +758,8 @@ async function runLoadingSequence() {
   // 团检用户：自动弹出团检套餐确认弹窗
   if (showGroupBanner.value) {
     showPending.value = true;
+  } else if (hasData.value) {
+    showExamNotify.value = true;
   }
 }
 
@@ -789,6 +801,7 @@ async function enterChat(key: string) {
       'view-risk': '查看健康风险',
       'make-package': '制定体检套餐',
       'report-interpret': '体检报告解读',
+      'view-exam-report': '帮我解读最新的体检报告',
       'exam-process': '了解体检流程',
       'consult': '预约咨询',
     };
@@ -1154,6 +1167,8 @@ onMounted(async () => {
       // 团检用户：自动弹出团检套餐确认弹窗
       if (showGroupBanner.value) {
         showPending.value = true;
+      } else if (hasData.value) {
+        showExamNotify.value = true;
       }
     } else {
       pagePhase.value = 'loading';
@@ -1169,6 +1184,16 @@ onShow(() => {
   if (pagePhase.value === 'ready' && showChat.value && currentTab.value === 'ai') {
     scrollToBottom();
   }
+});
+
+// 监听从报告页返回触发的 AI 解读
+function onStartExamInterpret() {
+  currentTab.value = 'ai';
+  enterChat('view-exam-report');
+}
+uni.$on('start-exam-interpret', onStartExamInterpret);
+onUnmounted(() => {
+  uni.$off('start-exam-interpret', onStartExamInterpret);
 });
 </script>
 

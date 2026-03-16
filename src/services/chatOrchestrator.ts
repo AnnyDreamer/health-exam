@@ -18,6 +18,7 @@ import {
   sendChatMessage,
   interpretReport,
   interpretPdfReport,
+  interpretHealthData,
   generateFollowUpPlan,
   generateRiskAnalysis,
   recommendPackageStream,
@@ -170,6 +171,7 @@ export class ChatOrchestrator {
       'view-risk': '帮我了解一下我的健康风险',
       'make-package': '帮我制定体检套餐',
       'report-interpret': '我想解读体检报告',
+      'view-exam-report': '帮我解读最新的体检报告',
       'exam-process': '了解一下体检流程',
       'consult': '我想预约咨询',
     };
@@ -192,6 +194,9 @@ export class ChatOrchestrator {
     } else if (key === 'report-interpret') {
       this.context.currentFlow = 'report';
       await this._startReportInterpretFlow();
+    } else if (key === 'view-exam-report') {
+      this.context.currentFlow = 'report';
+      await this._startViewExamReportFlow();
     } else if (key === 'exam-process') {
       await this._startGeneralFlow(key);
     } else if (key === 'consult') {
@@ -216,6 +221,12 @@ export class ChatOrchestrator {
       this.store.addMessage({ role: 'user', content, contentType: 'text' });
       this.context.currentFlow = 'report';
       await this._startReportInterpretFlow();
+      return;
+    }
+    if (value === 'view-exam-report') {
+      this.store.addMessage({ role: 'user', content, contentType: 'text' });
+      this.context.currentFlow = 'report';
+      await this._startViewExamReportFlow();
       return;
     }
     if (value === 'exam-process' || value === 'consult') {
@@ -575,6 +586,57 @@ export class ChatOrchestrator {
     this.conversationHistory = [{ role: 'user', content: initialPrompt }];
     await this._sendAIStream(this.conversationHistory);
     this.aiTurnCount++;
+  }
+
+  /** 查看已有体检报告 — 用已有健康数据生成 AI 解读 */
+  private async _startViewExamReportFlow() {
+    const name = this.context.userName;
+    this.store.setTyping(false);
+
+    // 打字机确认
+    await this._typewriterMessage(`好的，${name}，正在为您解读体检报告...`);
+
+    // 显示加载卡片
+    const cardMsgId = this.store.addMessage({
+      role: 'ai',
+      content: '',
+      contentType: 'risk-summary',
+      isReportInterpretation: true,
+      planGenerating: true,
+    });
+
+    try {
+      const healthInfo = this._formatHealthDataForAI();
+      const fullText = await interpretHealthData(healthInfo);
+
+      this.conversationHistory.push(
+        { role: 'user', content: `请帮我解读体检报告，以下是我的体检数据：\n${healthInfo}` },
+        { role: 'assistant', content: fullText },
+      );
+      this.aiTurnCount++;
+
+      // 保存报告解读记录
+      try {
+        const reportStore = useReportStore();
+        const record = reportStore.addReport({
+          title: '体检报告解读',
+          summary: fullText.slice(0, 200),
+          fullContent: fullText,
+        });
+        const msg = this.store.messages.find((m) => m.id === cardMsgId);
+        if (msg) msg.reportId = record.id;
+      } catch (_e) { /* ignore */ }
+
+      const plan = await generateRiskAnalysis(fullText);
+      this._finishReportCard(cardMsgId, fullText, plan);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : '未知错误';
+      this.store.updateMessage(cardMsgId, {
+        planGenerating: false,
+        content: `报告解读失败，请重试 (${errMsg})`,
+      });
+      this.store.saveChatHistory();
+    }
   }
 
   /** 启动通用对话流程 */

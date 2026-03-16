@@ -9,6 +9,9 @@ export interface HealthIndicator {
   value: string;
   status: 'normal' | 'high' | 'low';
   label: string;
+  reference?: string;    // 参考值，如 "0-40 U/L"、"<5.2 mmol/L"
+  suggestion?: string;   // AI 建议（异常项），如 "转氨酶轻度升高，建议减少油腻饮食，1个月后复查"
+  category?: string;     // 检查大类，如 "实验室检查"、"影像检查"、"体格检查"
 }
 
 export interface HealthData {
